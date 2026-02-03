@@ -3,62 +3,97 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تشغيل وتحميل فيديو يوتيوب</title>
+  <title>تشغيل وتحميل أي فيديو</title>
 
   <style>
     :root{
-      --bg:#0b1020;
-      --card:#121a33;
-      --muted:#a9b3d6;
-      --accent:#5b8cff;
-      --danger:#ff5b6a;
-      --border:rgba(255,255,255,.15);
-      --border2:rgba(255,255,255,.2);
+      --bg:#0b1020; --card:#121a33; --muted:#a9b3d6; --accent:#5b8cff;
+      --danger:#ff5b6a; --border:rgba(255,255,255,.15); --border2:rgba(255,255,255,.2);
     }
     *{box-sizing:border-box}
-    body{font-family:Tahoma,Arial,sans-serif;background:var(--bg);color:#fff;margin:0;padding:20px}
-    .box{max-width:960px;margin:auto;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+    body{font-family:Tahoma;background:var(--bg);color:#fff;margin:0;padding:20px}
+    .box{max-width:960px;margin:auto;background:var(--card);border:1px solid var(--border);
+      border-radius:14px;padding:16px}
     h3{margin:0 0 12px}
     .row{display:flex;gap:10px;flex-wrap:wrap}
     input{
-      flex:1 1 480px;
-      padding:12px;border-radius:10px;border:1px solid var(--border2);
+      flex:1 1 480px;padding:12px;border-radius:10px;border:1px solid var(--border2);
       background:rgba(0,0,0,.25);color:#fff;outline:none
     }
     button{
       padding:11px 14px;border-radius:10px;border:0;background:var(--accent);
       color:#07102a;font-weight:700;cursor:pointer
     }
-    .msg{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.8}
-    .err{color:var(--danger)}
     .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:#000}
-    .ratio{position:relative;padding-top:56.25%}
-    iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+    video{width:100%;height:auto;display:block}
 
-    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px;display:none;border:1px solid var(--border)}
-    .dl-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
-    .dl-filter{display:flex;gap:8px;flex-wrap:wrap}
-    .chip{border:1px solid var(--border2);color:#fff;background:transparent;padding:6px 10px;border-radius:999px;cursor:pointer;font-size:13px}
-    .chip.active{background:var(--accent);color:#07102a;border-color:transparent;font-weight:700}
-    .dl-list{display:flex;flex-direction:column;gap:8px}
-    .dl-item{padding:10px;background:#18203d;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-    .dl-left{display:flex;align-items:center;gap:10px}
-    .badge{padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border2);color:#dbe2ff}
-    .badge.video{background:#1c2a5f}
-    .badge.audio{background:#2a1c5f}
-    .meta{font-size:13px;color:#cfd6ff}
-    a.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold}
-    .empty{color:#cbd2f6;background:#151b34;border:1px dashed var(--border2);border-radius:10px;padding:16px;text-align:center}
-
-    .spinner{display:inline-block;width:18px;height:18px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;vertical-align:-4px;margin-inline-start:6px}
-    @keyframes spin{to{transform:rotate(360deg)}}
-
-    .hint{font-size:12px;color:#9aa7d3;margin-top:8px}
+    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px;border:1px solid var(--border)}
+    .dl-list{display:flex;flex-direction:column;gap:10px}
+    .dl-item{padding:10px;background:#18203d;border-radius:8px;
+      display:flex;justify-content:space-between;align-items:center}
+    .badge{padding:4px 8px;border-radius:999px;background:#1c2a5f;font-size:12px}
+    a.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;
+      text-decoration:none;font-weight:bold}
   </style>
 </head>
 
 <body>
   <div class="box">
-    <h3>ضع رابط يوتيوب ثم اضغط تشغيل</h3>
+    <h3>ضع رابط الفيديو (MP4 أو M3U8 أو أي رابط) ثم اضغط تشغيل</h3>
 
     <div class="row">
+      <input id="url" type="text" placeholder="مثال: https://site.com/video.mp4">
+      <button onclick="playVideo()">تشغيل</button>
+    </div>
+
+    <div id="msg" style="margin-top:10px;color:#a9b3d6"></div>
+
+    <div class="player" id="player" style="display:none">
+      <video id="video" controls></video>
+    </div>
+
+    <div class="dl-box" id="dlBox" style="display:none">
+      <h3>التحميل بعدة جودات</h3>
+      <div class="dl-list" id="dlList"></div>
+    </div>
+  </div>
+
+<script>
+function playVideo() {
+    const url = document.getElementById("url").value.trim();
+    const msg = document.getElementById("msg");
+    const video = document.getElementById("video");
+
+    if(!url){
+        msg.innerHTML = "⚠️ الرجاء إدخال رابط فيديو";
+        return;
+    }
+
+    msg.innerHTML = "";
+    document.getElementById("player").style.display = "block";
+    video.src = url;
+
+    // --- إنشاء روابط تحميل متعددة الجودات ---
+    const qualities = [
+        { q: "1080p", link: url.replace(".mp4", "_1080p.mp4") },
+        { q: "720p",  link: url.replace(".mp4", "_720p.mp4") },
+        { q: "480p",  link: url.replace(".mp4", "_480p.mp4") },
+        { q: "360p",  link: url.replace(".mp4", "_360p.mp4") }
+    ];
+
+    let html = "";
+    qualities.forEach(q => {
+        html += `
+          <div class="dl-item">
+            <span class="badge">جودة ${q.q}</span>
+            ${q.link}تحميل</a>
+          </div>
+        `;
+    });
+
+    document.getElementById("dlList").innerHTML = html;
+    document.getElementById("dlBox").style.display = "block";
+}
+</script>
+
+</body>
