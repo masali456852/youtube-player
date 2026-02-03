@@ -1,55 +1,75 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تشغيل أي فيديو</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مشغل فيديو لجميع الروابط</title>
 
-  <style>
-    body { background:#0b1020; color:#fff; font-family:Tahoma; padding:20px; }
-    .box { max-width:800px; margin:auto; background:#121a33; padding:20px; border-radius:10px; }
-    input { width:100%; padding:12px; border-radius:8px; border:1px solid #333; background:#0004; color:#fff; }
-    button { padding:12px 18px; margin-top:10px; background:#5b8cff; border:0; color:#000; border-radius:8px; font-weight:bold; cursor:pointer; }
-    video { width:100%; margin-top:20px; border-radius:12px; background:#000; }
-    .dl { margin-top:20px; background:#0f152b; padding:15px; border-radius:10px; }
-    .dl a { padding:10px 14px; background:#5b8cff; color:#000; font-weight:bold; text-decoration:none; border-radius:8px; }
-  </style>
+<style>
+body { background:#0b1020; color:#fff; font-family:Tahoma; padding:20px; }
+.box { max-width:900px; margin:auto; background:#121a33; padding:20px; border-radius:12px; }
+input { width:100%; padding:12px; border-radius:8px; border:1px solid #333; background:#0005; color:#fff; margin-bottom:10px; }
+button { padding:12px 18px; background:#5b8cff; border:0; color:#000; border-radius:8px; font-weight:bold; cursor:pointer; }
+video { width:100%; margin-top:20px; border-radius:10px; background:#000; }
+.dl { margin-top:20px; padding:15px; background:#181f3a; border-radius:10px; }
+.dl a { padding:10px 12px; background:#5b8cff; color:#000; text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block; }
+</style>
+
+<script/cdn.jsdelivr.net/npm/hls.js@latest
 </head>
 
 <body>
 
 <div class="box">
-  <h2>تشغيل وتحميل أي فيديو عبر خادم وسيط</h2>
+<h2>مشغل فيديو لجميع الروابط (MP4 - M3U8 - Vimeo - Dailymotion - Google Drive)</h2>
 
-  <input id="url" placeholder="ضع رابط الفيديو هنا (MP4 أو M3U8)">
-  <button onclick="start()">تشغيل</button>
+<input id="url" placeholder="ضع رابط أي فيديو هنا">
+<button onclick="start()">تشغيل</button>
 
-  <video id="player" controls style="display:none;"></video>
+<video id="player" controls style="display:none;"></video>
 
-  <div id="dlBox" class="dl" style="display:none;">
-    <h3>تحميل الفيديو:</h3>
-    <a id="dl" href="#"
+<div class="dl" id="dlBox" style="display:none;">
+  <h3>تحميل الفيديو:</h3>
+  #تحميل</a>
+</div>
 </div>
 
 <script>
-function proxy(url) {
+
+function proxy(url){
     return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
 }
 
-function start() {
-    let url = document.getElementById("url").value.trim();
-    if (!url) { alert("أدخل رابط صالح"); return; }
+function start(){
+    const url = document.getElementById("url").value.trim();
+    const video = document.getElementById("player");
 
-    let player = document.getElementById("player");
+    if(!url){ alert("أدخل الرابط أولاً"); return; }
 
-    // شغل الفيديو عبر سيرفر وسيط
-    player.src = proxy(url);
-    player.style.display = "block";
+    const finalURL = proxy(url);
 
-    // التحميل عبر نفس السيرفر
-    document.getElementById("dl").href = proxy(url);
+    video.style.display = "block";
+
+    // تشغيل M3U8
+    if(url.endsWith(".m3u8")){
+        if(Hls.isSupported()){
+            const hls = new Hls();
+            hls.loadSource(finalURL);
+            hls.attachMedia(video);
+        }else{
+            video.src = finalURL;
+        }
+    } 
+    // باقي الصيغ MP4 وغيرها
+    else {
+        video.src = finalURL;
+    }
+
+    // زر التحميل
+    document.getElementById("dlBtn").href = finalURL;
     document.getElementById("dlBox").style.display = "block";
 }
+
 </script>
 
 </body>
