@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تشغيل يوتيوب داخل الصفحة</title>
+  <title>تشغيل وتحميل فيديو يوتيوب</title>
+
   <style>
     body{font-family:Tahoma,Arial,sans-serif;background:#0b1020;color:#fff;margin:0;padding:20px}
     .box{max-width:900px;margin:auto;background:#121a33;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:16px}
@@ -14,13 +15,16 @@
     .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.15);background:#000}
     .ratio{position:relative;padding-top:56.25%}
     iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px}
+    .dl-item{margin:6px 0;padding:10px;background:#18203d;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+    a.dl-btn{color:#fff;background:#5b8cff;padding:6px 10px;border-radius:6px;text-decoration:none;font-weight:bold}
   </style>
 </head>
+
 <body>
   <div class="box">
     <h3 style="margin:0 0 10px">ضع رابط يوتيوب ثم اضغط تشغيل</h3>
 
-    <!-- لاحظ: لا يوجد form حتى لا يحدث reload -->
     <input id="ytInput" placeholder="مثال: https://youtu.be/dQw4w9WgXcQ" />
     <button id="playBtn" type="button">تشغيل</button>
 
@@ -36,90 +40,122 @@
           allowfullscreen></iframe>
       </div>
     </div>
+
+    <div id="downloadBox" class="dl-box" style="display:none;">
+      <h4>خيارات التحميل المتاحة:</h4>
+      <div id="dlList"></div>
+    </div>
+
   </div>
 
-  <script>
-    // اختبار سريع: إذا رأيت هذه الرسالة في Console فمعناه السكربت يعمل
-    console.log("JS Loaded ✅");
+<script>
+console.log("JS Loaded ✅");
 
-    const input  = document.getElementById("ytInput");
-    const btn    = document.getElementById("playBtn");
-    const status = document.getElementById("status");
-    const frame  = document.getElementById("ytFrame");
+const input  = document.getElementById("ytInput");
+const btn    = document.getElementById("playBtn");
+const status = document.getElementById("status");
+const frame  = document.getElementById("ytFrame");
+const dlBox  = document.getElementById("downloadBox");
+const dlList = document.getElementById("dlList");
 
-    function setStatus(text, isError=false){
-      status.textContent = text;
-      status.className = isError ? "msg err" : "msg";
+function setStatus(text, isError=false){
+  status.textContent = text;
+  status.className = isError ? "msg err" : "msg";
+}
+
+function extractId(raw){
+  const text = (raw || "").trim();
+  if(!text) return null;
+
+  if(/^[a-zA-Z0-9_-]{11}$/.test(text)) return text;
+
+  let urlText = text;
+  if(text.startsWith("www.")) urlText = "https://" + text;
+  if(text.startsWith("youtu.be/")) urlText = "https://" + text;
+  if(text.startsWith("youtube.com/")) urlText = "https://" + text;
+
+  try{
+    const u = new URL(urlText);
+
+    if(u.hostname.includes("youtu.be")){
+      return u.pathname.split("/").filter(Boolean)[0] || null;
     }
+    const v = u.searchParams.get("v");
+    if(v) return v;
 
-    function extractId(raw){
-      const text = (raw || "").trim();
-      if(!text) return null;
+    const m1 = u.pathname.match(/\/shorts\/([^/?#]+)/);
+    if(m1) return m1[1];
 
-      // إذا المستخدم كتب ID فقط (11 حرف غالبًا)
-      if(/^[a-zA-Z0-9_-]{11}$/.test(text)) return text;
+    const m2 = u.pathname.match(/\/embed\/([^/?#]+)/);
+    if(m2) return m2[1];
 
-      // حاول تحويل النص إلى URL
-      let urlText = text;
-      if(text.startsWith("www.")) urlText = "https://" + text;
-      if(text.startsWith("youtu.be/")) urlText = "https://" + text;
-      if(text.startsWith("youtube.com/")) urlText = "https://" + text;
+    return null;
+  } catch(e){
+    return null;
+  }
+}
 
-      try{
-        const u = new URL(urlText);
+function buildEmbed(id){
+  return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&modestbranding=1&playsinline=1`;
+}
 
-        // youtu.be/ID
-        if(u.hostname.includes("youtu.be")){
-          return u.pathname.split("/").filter(Boolean)[0] || null;
-        }
+// Fetch download links from Piped API
+async function fetchDownloadLinks(id){
+  const api = `https://piped.video/api/v1/videos/${id}`;
 
-        // watch?v=ID
-        const v = u.searchParams.get("v");
-        if(v) return v;
+  const res = await fetch(api);
+  const data = await res.json();
 
-        // shorts/ID
-        const m1 = u.pathname.match(/\/shorts\/([^/?#]+)/);
-        if(m1) return m1[1];
+  return data.formatStreams || [];
+}
 
-        // embed/ID
-        const m2 = u.pathname.match(/\/embed\/([^/?#]+)/);
-        if(m2) return m2[1];
+btn.addEventListener("click", async () => {
 
-        return null;
-      } catch(e){
-        return null;
-      }
-    }
+  const id = extractId(input.value);
+  if(!id){
+    setStatus("الرابط غير صحيح أو لا يحتوي على معرف فيديو.", true);
+    frame.src = "";
+    dlBox.style.display = "none";
+    return;
+  }
 
-    function buildEmbed(id){
-      const base = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}`;
-      const params = new URLSearchParams({
-        autoplay: "1",
-        rel: "0",
-        modestbranding: "1",
-        playsinline: "1"
-      });
-      return base + "?" + params.toString();
-    }
+  frame.src = buildEmbed(id);
+  setStatus("تم تحميل الفيديو داخل الصفحة ✅");
 
-    btn.addEventListener("click", () => {
-      console.log("Button clicked ✅");
+  // تحميل الجودات
+  setStatus("جاري جلب روابط التحميل…");
 
-      const id = extractId(input.value);
-      if(!id){
-        setStatus("الرابط غير صحيح أو لا يحتوي على معرف فيديو.", true);
-        frame.src = "";
-        return;
-      }
+  try{
+    const qualities = await fetchDownloadLinks(id);
 
-      frame.src = buildEmbed(id);
-      setStatus("تم تحميل الفيديو داخل الصفحة ✅");
+    dlList.innerHTML = "";
+    dlBox.style.display = "block";
+
+    qualities.forEach(q => {
+      const item = document.createElement("div");
+      item.className = "dl-item";
+
+      item.innerHTML = `
+        <span>${q.quality} — ${q.format}</span>
+        ${q.url}تحميل</a>
+      `;
+      dlList.appendChild(item);
     });
 
-    // Enter لتشغيل
-    input.addEventListener("keydown", (e) => {
-      if(e.key === "Enter") btn.click();
-    });
-  </script>
+    setStatus("تم استخراج روابط التحميل بنجاح 🎉");
+
+  } catch(err){
+    console.error(err);
+    setStatus("تعذر جلب روابط التحميل.", true);
+  }
+
+});
+
+// تشغيل via Enter
+input.addEventListener("keydown", (e) => {
+  if(e.key === "Enter") btn.click();
+});
+</script>
+
 </body>
 </html>
