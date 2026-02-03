@@ -1,63 +1,130 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>تشغيل وتحميل أي فيديو</title>
 
+  <!-- Video.js -->
+  https://vjs.zencdn.net/8.10.0/video-js.css
+  https://vjs.zencdn.net/8.10.0/video.min.js
+
+  <!-- HLS.js لدعم m3u8 -->
+  https://cdn.jsdelivr.net/npm/hls.js@latest</script>
+
   <style>
-    body{background:#0b1020;color:#fff;font-family:Tahoma;padding:20px}
-    .box{max-width:900px;margin:auto;background:#121a33;padding:20px;border-radius:14px}
-    input{width:100%;padding:12px;border-radius:8px;border:1px solid #444;background:#0003;color:#fff;margin-bottom:10px}
-    button{padding:12px 20px;background:#5b8cff;color:#000;font-weight:bold;border:0;border-radius:8px;cursor:pointer}
-    video{width:100%;margin-top:15px;border-radius:12px;background:#000}
-    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px}
-    .dl-item{padding:10px;background:#18203d;border-radius:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-    .dl-btn{background:#5b8cff;color:#000;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:bold}
+    body {
+      background: #0b1020;
+      color: #fff;
+      padding: 20px;
+      font-family: Tahoma;
+    }
+
+    .box {
+      max-width: 900px;
+      margin: auto;
+      background: #121a33;
+      padding: 20px;
+      border-radius: 14px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #0003;
+      color: #fff;
+    }
+
+    button {
+      padding: 12px 18px;
+      border-radius: 8px;
+      border: none;
+      background: #5b8cff;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 15px;
+    }
+
+    .dl {
+      margin-top: 20px;
+      background: #0f152b;
+      padding: 15px;
+      border-radius: 10px;
+    }
+
+    .dl a {
+      display: inline-block;
+      padding: 10px 15px;
+      background: #5b8cff;
+      color: #000;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+    }
   </style>
 </head>
 
 <body>
+
   <div class="box">
+
     <h2>تشغيل وتحميل أي فيديو من رابط مباشر</h2>
 
-    <input id="url" placeholder="ضع رابط MP4 أو M3U8 أو WebM هنا">
-    <button onclick="playVideo()">تشغيل</button>
+    <input id="url" placeholder="مثال: https://site.com/video.mp4 أو .m3u8">
+    <button onclick="start()">تشغيل</button>
 
-    <video id="player" controls style="display:none"></video>
+    <video id="player" class="video-js vjs-default-skin" controls preload="auto"
+      style="width:100%; height:auto; display:none; border-radius:10px;"></video>
 
-    <div id="dlBox" class="dl-box" style="display:none">
-      <h3>خيارات التحميل</h3>
-      <div id="dlList"></div>
+    <div id="downloadBox" class="dl" style="display:none;">
+      <h3>تحميل الفيديو:</h3>
+      #اضغط للتحميل</a>
     </div>
 
   </div>
 
-<script>
-function playVideo() {
-    const url = document.getElementById("url").value.trim();
-    const player = document.getElementById("player");
+  <script>
+    function start() {
+      const url = document.getElementById("url").value.trim();
+      const playerElement = document.getElementById("player");
+      const downloadLink = document.getElementById("downloadLink");
 
-    if (!url) {
-        alert("⚠️ الرجاء إدخال رابط فيديو صالح");
+      if (!url) {
+        alert("❌ الرجاء وضع رابط فيديو صحيح");
         return;
+      }
+
+      // إظهار المشغل
+      playerElement.style.display = "block";
+
+      // مشغل Video.js
+      const player = videojs(playerElement);
+
+      // تشغيل m3u8 بضغط سيرفر خارجي
+      if (url.endsWith(".m3u8")) {
+        if (Hls.isSupported()) {
+          const hls = new Hls();
+          hls.loadSource(url);
+          hls.attachMedia(playerElement);
+        } else {
+          player.src({ src: url, type: "application/x-mpegURL" });
+        }
+      } else {
+        // تشغيل MP4/WebM
+        player.src({ src: url, type: "video/mp4" });
+      }
+
+      // رابط التحميل
+      downloadLink.href = url;
+      document.getElementById("downloadBox").style.display = "block";
     }
-
-    // تشغيل الفيديو
-    player.src = url;
-    player.style.display = "block";
-
-    // توليد زر تحميل مباشر (جودة واحدة)
-    let html = `
-      <div class="dl-item">
-        <span>تحميل بنفس الجودة</span>
-        <a class="dl-btn      </div>
-    `;
-
-    document.getElementById("dlList").innerHTML = html;
-    document.getElementById("dlBox").style.display = "block";
-}
-</script>
+  </script>
 
 </body>
+
 </html>
