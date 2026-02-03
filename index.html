@@ -6,90 +6,53 @@
   <title>تشغيل وتحميل أي فيديو</title>
 
   <style>
-    :root{
-      --bg:#0b1020; --card:#121a33; --muted:#a9b3d6; --accent:#5b8cff;
-      --danger:#ff5b6a; --border:rgba(255,255,255,.15); --border2:rgba(255,255,255,.2);
-    }
-    *{box-sizing:border-box}
-    body{font-family:Tahoma;background:var(--bg);color:#fff;margin:0;padding:20px}
-    .box{max-width:960px;margin:auto;background:var(--card);border:1px solid var(--border);
-      border-radius:14px;padding:16px}
-    h3{margin:0 0 12px}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    input{
-      flex:1 1 480px;padding:12px;border-radius:10px;border:1px solid var(--border2);
-      background:rgba(0,0,0,.25);color:#fff;outline:none
-    }
-    button{
-      padding:11px 14px;border-radius:10px;border:0;background:var(--accent);
-      color:#07102a;font-weight:700;cursor:pointer
-    }
-    .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:#000}
-    video{width:100%;height:auto;display:block}
-
-    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px;border:1px solid var(--border)}
-    .dl-list{display:flex;flex-direction:column;gap:10px}
-    .dl-item{padding:10px;background:#18203d;border-radius:8px;
-      display:flex;justify-content:space-between;align-items:center}
-    .badge{padding:4px 8px;border-radius:999px;background:#1c2a5f;font-size:12px}
-    a.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;
-      text-decoration:none;font-weight:bold}
+    body{background:#0b1020;color:#fff;font-family:Tahoma;padding:20px}
+    .box{max-width:900px;margin:auto;background:#121a33;padding:20px;border-radius:14px}
+    input{width:100%;padding:12px;border-radius:8px;border:1px solid #444;background:#0003;color:#fff;margin-bottom:10px}
+    button{padding:12px 20px;background:#5b8cff;color:#000;font-weight:bold;border:0;border-radius:8px;cursor:pointer}
+    video{width:100%;margin-top:15px;border-radius:12px;background:#000}
+    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px}
+    .dl-item{padding:10px;background:#18203d;border-radius:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+    .dl-btn{background:#5b8cff;color:#000;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:bold}
   </style>
 </head>
 
 <body>
   <div class="box">
-    <h3>ضع رابط الفيديو (MP4 أو M3U8 أو أي رابط) ثم اضغط تشغيل</h3>
+    <h2>تشغيل وتحميل أي فيديو من رابط مباشر</h2>
 
-    <div class="row">
-      <input id="url" type="text" placeholder="مثال: https://site.com/video.mp4">
-      <button onclick="playVideo()">تشغيل</button>
+    <input id="url" placeholder="ضع رابط MP4 أو M3U8 أو WebM هنا">
+    <button onclick="playVideo()">تشغيل</button>
+
+    <video id="player" controls style="display:none"></video>
+
+    <div id="dlBox" class="dl-box" style="display:none">
+      <h3>خيارات التحميل</h3>
+      <div id="dlList"></div>
     </div>
 
-    <div id="msg" style="margin-top:10px;color:#a9b3d6"></div>
-
-    <div class="player" id="player" style="display:none">
-      <video id="video" controls></video>
-    </div>
-
-    <div class="dl-box" id="dlBox" style="display:none">
-      <h3>التحميل بعدة جودات</h3>
-      <div class="dl-list" id="dlList"></div>
-    </div>
   </div>
 
 <script>
 function playVideo() {
     const url = document.getElementById("url").value.trim();
-    const msg = document.getElementById("msg");
-    const video = document.getElementById("video");
+    const player = document.getElementById("player");
 
-    if(!url){
-        msg.innerHTML = "⚠️ الرجاء إدخال رابط فيديو";
+    if (!url) {
+        alert("⚠️ الرجاء إدخال رابط فيديو صالح");
         return;
     }
 
-    msg.innerHTML = "";
-    document.getElementById("player").style.display = "block";
-    video.src = url;
+    // تشغيل الفيديو
+    player.src = url;
+    player.style.display = "block";
 
-    // --- إنشاء روابط تحميل متعددة الجودات ---
-    const qualities = [
-        { q: "1080p", link: url.replace(".mp4", "_1080p.mp4") },
-        { q: "720p",  link: url.replace(".mp4", "_720p.mp4") },
-        { q: "480p",  link: url.replace(".mp4", "_480p.mp4") },
-        { q: "360p",  link: url.replace(".mp4", "_360p.mp4") }
-    ];
-
-    let html = "";
-    qualities.forEach(q => {
-        html += `
-          <div class="dl-item">
-            <span class="badge">جودة ${q.q}</span>
-            ${q.link}تحميل</a>
-          </div>
-        `;
-    });
+    // توليد زر تحميل مباشر (جودة واحدة)
+    let html = `
+      <div class="dl-item">
+        <span>تحميل بنفس الجودة</span>
+        <a class="dl-btn      </div>
+    `;
 
     document.getElementById("dlList").innerHTML = html;
     document.getElementById("dlBox").style.display = "block";
@@ -97,3 +60,4 @@ function playVideo() {
 </script>
 
 </body>
+</html>
