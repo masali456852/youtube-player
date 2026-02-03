@@ -1,76 +1,83 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>مشغل فيديو لجميع الروابط</title>
-
-<style>
-body { background:#0b1020; color:#fff; font-family:Tahoma; padding:20px; }
-.box { max-width:900px; margin:auto; background:#121a33; padding:20px; border-radius:12px; }
-input { width:100%; padding:12px; border-radius:8px; border:1px solid #333; background:#0005; color:#fff; margin-bottom:10px; }
-button { padding:12px 18px; background:#5b8cff; border:0; color:#000; border-radius:8px; font-weight:bold; cursor:pointer; }
-video { width:100%; margin-top:20px; border-radius:10px; background:#000; }
-.dl { margin-top:20px; padding:15px; background:#181f3a; border-radius:10px; }
-.dl a { padding:10px 12px; background:#5b8cff; color:#000; text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block; }
-</style>
-
-<script/cdn.jsdelivr.net/npm/hls.js@latest
-</head>
-
-<body>
-
-<div class="box">
-<h2>مشغل فيديو لجميع الروابط (MP4 - M3U8 - Vimeo - Dailymotion - Google Drive)</h2>
-
-<input id="url" placeholder="ضع رابط أي فيديو هنا">
-<button onclick="start()">تشغيل</button>
-
-<video id="player" controls style="display:none;"></video>
-
-<div class="dl" id="dlBox" style="display:none;">
-  <h3>تحميل الفيديو:</h3>
-  #تحميل</a>
-</div>
-</div>
+https://cdn.jsdelivr.net/npm/hls.js@latest
 
 <script>
+async function loadVideo() {
+    const input = document.querySelector("input");
+    const url = input.value.trim();
+    const msg = document.querySelector(".msg");
+    const playerBox = document.querySelector(".player");
+    const iframeBox = document.querySelector(".ratio");
+    const dlBox = document.querySelector(".dl-box");
+    const dlList = document.querySelector(".dl-list");
 
-function proxy(url){
-    return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
-}
-
-function start(){
-    const url = document.getElementById("url").value.trim();
-    const video = document.getElementById("player");
-
-    if(!url){ alert("أدخل الرابط أولاً"); return; }
-
-    const finalURL = proxy(url);
-
-    video.style.display = "block";
-
-    // تشغيل M3U8
-    if(url.endsWith(".m3u8")){
-        if(Hls.isSupported()){
-            const hls = new Hls();
-            hls.loadSource(finalURL);
-            hls.attachMedia(video);
-        }else{
-            video.src = finalURL;
-        }
-    } 
-    // باقي الصيغ MP4 وغيرها
-    else {
-        video.src = finalURL;
+    if (!url) {
+        msg.innerHTML = "<span class='err'>⚠️ الرجاء إدخال رابط فيديو</span>";
+        return;
     }
 
-    // زر التحميل
-    document.getElementById("dlBtn").href = finalURL;
-    document.getElementById("dlBox").style.display = "block";
+    msg.innerHTML = "";
+    playerBox.style.display = "block";
+    dlBox.style.display = "block";
+
+    // إزالة iframe القديم
+    iframeBox.innerHTML = "";
+
+    // إنشاء عنصر فيديو
+    let videoEl = document.createElement("video");
+    videoEl.controls = true;
+    videoEl.style.width = "100%";
+    videoEl.style.height = "100%";
+
+    iframeBox.appendChild(videoEl);
+
+    // لو الرابط M3U8
+    if (url.endsWith(".m3u8")) {
+        if (Hls.isSupported()) {
+            let hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(videoEl);
+        } else {
+            videoEl.src = url;
+        }
+    } else {
+        // روابط MP4 / WebM
+        videoEl.src = url;
+    }
+
+    // ------- إنشاء روابط التحميل --------
+    const qualities = [
+        { label: "1080p", q: "1080" },
+        { label: "720p",  q: "720" },
+        { label: "480p",  q: "480" },
+        { label: "360p",  q: "360" },
+    ];
+
+    dlList.innerHTML = "";
+
+    qualities.forEach(q => {
+        // تخمين روابط الجودات عبر استبدال الرقمية – مثل سيرفرات كثيرة تسمح بهذا
+        let qUrl = url.replace(/(\d+)(p)?/i, q.q + "p");
+
+        let row = `
+        <div class="dl-item">
+            <div class="dl-left">
+                <span class="badge video">فيديو</span>
+                <span class="meta">جودة ${q.label}</span>
+            </div>
+            ${qUrl}تحميل</a>
+        </div>`;
+
+        dlList.innerHTML += row;
+    });
+
+    // زر تحميل بنفس الرابط الأصلي
+    dlList.innerHTML += `
+    <div class="dl-item">
+        <div class="dl-left">
+            <span class="badge video">أصلي</span>
+            <span class="meta">الرابط كما هو</span>
+        </div>
+        ${url}تحميل</a>
+    </div>`;
 }
-
 </script>
-
-</body>
-</html>
