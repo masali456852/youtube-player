@@ -1,12 +1,79 @@
-https://cdn.jsdelivr.net/npm/hls.js@latest
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تشغيل وتحميل أي فيديو</title>
+
+  <style>
+    :root{
+      --bg:#0b1020;
+      --card:#121a33;
+      --muted:#a9b3d6;
+      --accent:#5b8cff;
+      --danger:#ff5b6a;
+      --border:rgba(255,255,255,.15);
+      --border2:rgba(255,255,255,.2);
+    }
+    *{box-sizing:border-box}
+    body{font-family:Tahoma,Arial,sans-serif;background:var(--bg);color:#fff;margin:0;padding:20px}
+    .box{max-width:960px;margin:auto;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+    h3{margin:0 0 12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    input{
+      flex:1 1 480px;
+      padding:12px;border-radius:10px;border:1px solid var(--border2);
+      background:rgba(0,0,0,.25);color:#fff;outline:none
+    }
+    button{
+      padding:11px 14px;border-radius:10px;border:0;background:var(--accent);
+      color:#07102a;font-weight:700;cursor:pointer
+    }
+    .msg{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.8}
+    .err{color:var(--danger)}
+    .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:#000}
+    .ratio{position:relative;padding-top:56.25%}
+    video, iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+
+    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px;display:none;border:1px solid var(--border)}
+    .dl-list{display:flex;flex-direction:column;gap:8px}
+    .dl-item{padding:10px;background:#18203d;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+    .badge{padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border2);color:#dbe2ff;background:#1c2a5f}
+    .meta{font-size:13px;color:#cfd6ff}
+    a.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold}
+  </style>
+
+  <!-- دعم تشغيل M3U8 -->
+  https://cdn.jsdelivr.net/npm/hls.js@latest
+</head>
+
+<body>
+  <div class="box">
+    <h3>ضع رابط فيديو مباشر ثم اضغط تشغيل</h3>
+
+    <div class="row">
+      <input id="url" type="text" placeholder="مثال: https://site.com/video.mp4 أو m3u8 أو webm">
+      <button onclick="playAnyVideo()">تشغيل</button>
+    </div>
+
+    <div class="msg"></div>
+
+    <div class="player" style="display:none;">
+      <div class="ratio"></div>
+    </div>
+
+    <div class="dl-box">
+      <h3>خيارات التحميل</h3>
+      <div class="dl-list"></div>
+    </div>
+  </div>
 
 <script>
-async function loadVideo() {
-    const input = document.querySelector("input");
-    const url = input.value.trim();
+function playAnyVideo() {
+    const url = document.getElementById("url").value.trim();
     const msg = document.querySelector(".msg");
-    const playerBox = document.querySelector(".player");
-    const iframeBox = document.querySelector(".ratio");
+    const player = document.querySelector(".player");
+    const ratio = document.querySelector(".ratio");
     const dlBox = document.querySelector(".dl-box");
     const dlList = document.querySelector(".dl-list");
 
@@ -16,68 +83,9 @@ async function loadVideo() {
     }
 
     msg.innerHTML = "";
-    playerBox.style.display = "block";
-    dlBox.style.display = "block";
+    player.style.display = "block";
 
-    // إزالة iframe القديم
-    iframeBox.innerHTML = "";
+    // تنظيف المشغل القديم
+    ratio.innerHTML = "";
 
     // إنشاء عنصر فيديو
-    let videoEl = document.createElement("video");
-    videoEl.controls = true;
-    videoEl.style.width = "100%";
-    videoEl.style.height = "100%";
-
-    iframeBox.appendChild(videoEl);
-
-    // لو الرابط M3U8
-    if (url.endsWith(".m3u8")) {
-        if (Hls.isSupported()) {
-            let hls = new Hls();
-            hls.loadSource(url);
-            hls.attachMedia(videoEl);
-        } else {
-            videoEl.src = url;
-        }
-    } else {
-        // روابط MP4 / WebM
-        videoEl.src = url;
-    }
-
-    // ------- إنشاء روابط التحميل --------
-    const qualities = [
-        { label: "1080p", q: "1080" },
-        { label: "720p",  q: "720" },
-        { label: "480p",  q: "480" },
-        { label: "360p",  q: "360" },
-    ];
-
-    dlList.innerHTML = "";
-
-    qualities.forEach(q => {
-        // تخمين روابط الجودات عبر استبدال الرقمية – مثل سيرفرات كثيرة تسمح بهذا
-        let qUrl = url.replace(/(\d+)(p)?/i, q.q + "p");
-
-        let row = `
-        <div class="dl-item">
-            <div class="dl-left">
-                <span class="badge video">فيديو</span>
-                <span class="meta">جودة ${q.label}</span>
-            </div>
-            ${qUrl}تحميل</a>
-        </div>`;
-
-        dlList.innerHTML += row;
-    });
-
-    // زر تحميل بنفس الرابط الأصلي
-    dlList.innerHTML += `
-    <div class="dl-item">
-        <div class="dl-left">
-            <span class="badge video">أصلي</span>
-            <span class="meta">الرابط كما هو</span>
-        </div>
-        ${url}تحميل</a>
-    </div>`;
-}
-</script>
