@@ -6,171 +6,59 @@
   <title>تشغيل وتحميل فيديو يوتيوب</title>
 
   <style>
-    body{font-family:Tahoma,Arial,sans-serif;background:#0b1020;color:#fff;margin:0;padding:20px}
-    .box{max-width:900px;margin:auto;background:#121a33;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:16px}
-    input{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.25);color:#fff;outline:none}
-    button{margin-top:10px;padding:11px 14px;border-radius:10px;border:0;background:#5b8cff;color:#07102a;font-weight:700;cursor:pointer}
-    .msg{margin-top:10px;color:#a9b3d6;font-size:13px;line-height:1.8}
-    .err{color:#ff5b6a}
-    .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.15);background:#000}
+    :root{
+      --bg:#0b1020;
+      --card:#121a33;
+      --muted:#a9b3d6;
+      --accent:#5b8cff;
+      --danger:#ff5b6a;
+      --border:rgba(255,255,255,.15);
+      --border2:rgba(255,255,255,.2);
+    }
+    *{box-sizing:border-box}
+    body{font-family:Tahoma,Arial,sans-serif;background:var(--bg);color:#fff;margin:0;padding:20px}
+    .box{max-width:960px;margin:auto;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+    h3{margin:0 0 12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    input{
+      flex:1 1 480px;
+      padding:12px;border-radius:10px;border:1px solid var(--border2);
+      background:rgba(0,0,0,.25);color:#fff;outline:none
+    }
+    button{
+      padding:11px 14px;border-radius:10px;border:0;background:var(--accent);
+      color:#07102a;font-weight:700;cursor:pointer
+    }
+    .msg{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.8}
+    .err{color:var(--danger)}
+    .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:#000}
     .ratio{position:relative;padding-top:56.25%}
     iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 
-    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px;display:none}
-    .dl-item{margin:6px 0;padding:10px;background:#18203d;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
-    a.dl-btn{color:#fff;background:#5b8cff;padding:6px 10px;border-radius:6px;text-decoration:none;font-weight:bold}
+    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px;display:none;border:1px solid var(--border)}
+    .dl-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+    .dl-filter{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{border:1px solid var(--border2);color:#fff;background:transparent;padding:6px 10px;border-radius:999px;cursor:pointer;font-size:13px}
+    .chip.active{background:var(--accent);color:#07102a;border-color:transparent;font-weight:700}
+    .dl-list{display:flex;flex-direction:column;gap:8px}
+    .dl-item{padding:10px;background:#18203d;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .dl-left{display:flex;align-items:center;gap:10px}
+    .badge{padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border2);color:#dbe2ff}
+    .badge.video{background:#1c2a5f}
+    .badge.audio{background:#2a1c5f}
+    .meta{font-size:13px;color:#cfd6ff}
+    a.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold}
+    .empty{color:#cbd2f6;background:#151b34;border:1px dashed var(--border2);border-radius:10px;padding:16px;text-align:center}
+
+    .spinner{display:inline-block;width:18px;height:18px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;vertical-align:-4px;margin-inline-start:6px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .hint{font-size:12px;color:#9aa7d3;margin-top:8px}
   </style>
 </head>
 
 <body>
   <div class="box">
-    <h3 style="margin:0 0 10px">ضع رابط يوتيوب ثم اضغط تشغيل</h3>
+    <h3>ضع رابط يوتيوب ثم اضغط تشغيل</h3>
 
-    <input id="ytInput" placeholder="مثال: https://youtu.be/dQw4w9WgXcQ" />
-    <button id="playBtn" type="button">تشغيل</button>
-
-    <div id="status" class="msg">جاهز…</div>
-
-    <div class="player">
-      <div class="ratio">
-        <iframe id="ytFrame"
-          title="YouTube Player"
-          loading="lazy"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          referrerpolicy="strict-origin-when-cross-origin"
-          allowfullscreen></iframe>
-      </div>
-    </div>
-
-    <div id="downloadBox" class="dl-box">
-      <h4>خيارات التحميل المتاحة:</h4>
-      <div id="dlList"></div>
-    </div>
-
-  </div>
-
-<script>
-console.log("JS Loaded ✅");
-
-const input  = document.getElementById("ytInput");
-const btn    = document.getElementById("playBtn");
-const status = document.getElementById("status");
-const frame  = document.getElementById("ytFrame");
-const dlBox  = document.getElementById("downloadBox");
-const dlList = document.getElementById("dlList");
-
-function setStatus(text, isError=false){
-  status.textContent = text;
-  status.className = isError ? "msg err" : "msg";
-}
-
-function extractId(raw){
-  const text = (raw || "").trim();
-  if(!text) return null;
-
-  if(/^[a-zA-Z0-9_-]{11}$/.test(text)) return text;
-
-  let urlText = text;
-  if(text.startsWith("www.")) urlText = "https://" + text;
-  if(text.startsWith("youtu.be/")) urlText = "https://" + text;
-  if(text.startsWith("youtube.com/")) urlText = "https://" + text;
-
-  try{
-    const u = new URL(urlText);
-
-    if(u.hostname.includes("youtu.be")){
-      return u.pathname.split("/").filter(Boolean)[0] || null;
-    }
-    const v = u.searchParams.get("v");
-    if(v) return v;
-
-    const m1 = u.pathname.match(/\/shorts\/([^/?#]+)/);
-    if(m1) return m1[1];
-
-    const m2 = u.pathname.match(/\/embed\/([^/?#]+)/);
-    if(m2) return m2[1];
-
-    return null;
-  } catch(e){
-    return null;
-  }
-}
-
-function buildEmbed(id){
-  return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&modestbranding=1&playsinline=1`;
-}
-
-// دالة جلب روابط التحميل عبر y2mate.ch
-async function fetchDownloadLinks(id){
-  const api = "https://api.y2mate.ch/api/convert";
-
-  const body = {
-    url: "https://www.youtube.com/watch?v=" + id
-  };
-
-  const res = await fetch(api, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json();
-
-  if (!data || !data.formats) return [];
-
-  return data.formats.map(f => ({
-    quality: f.quality,
-    format: f.ext,
-    url: f.url
-  }));
-}
-
-btn.addEventListener("click", async () => {
-
-  const id = extractId(input.value);
-  if(!id){
-    setStatus("الرابط غير صحيح أو لا يحتوي على معرف فيديو.", true);
-    frame.src = "";
-    dlBox.style.display = "none";
-    return;
-  }
-
-  frame.src = buildEmbed(id);
-  setStatus("تم تحميل الفيديو داخل الصفحة ✅");
-
-  setStatus("جاري جلب روابط التحميل…");
-
-  try{
-    const qualities = await fetchDownloadLinks(id);
-
-    dlList.innerHTML = "";
-    dlBox.style.display = "block";
-
-    qualities.forEach(q => {
-      const item = document.createElement("div");
-      item.className = "dl-item";
-
-      item.innerHTML = `
-        <span>${q.quality} — ${q.format}</span>
-        <a class="dl-btn"
-      `;
-      dlList.appendChild(item);
-    });
-
-    setStatus("تم استخراج روابط التحميل بنجاح 🎉");
-
-  } catch(err){
-    console.error(err);
-    setStatus("تعذر جلب روابط التحميل.", true);
-  }
-
-});
-
-// تشغيل عبر Enter
-input.addEventListener("keydown", (e) => {
-  if(e.key === "Enter") btn.click();
-});
-</script>
-
-</body>
-</html>
+    <div class="row">
