@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تشغيل وتحميل أي فيديو</title>
+  <title>تشغيل وتحميل أي فيديو (روابط مباشرة)</title>
 
   <style>
     :root{
@@ -29,22 +29,25 @@
       padding:11px 14px;border-radius:10px;border:0;background:var(--accent);
       color:#07102a;font-weight:700;cursor:pointer
     }
-    .msg{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.8}
+    .msg{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.8;white-space:pre-wrap}
     .err{color:var(--danger)}
     .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:#000}
     .ratio{position:relative;padding-top:56.25%}
-    video, iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
-
+    video{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
     .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px;display:none;border:1px solid var(--border)}
+    .dl-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
     .dl-list{display:flex;flex-direction:column;gap:8px}
-    .dl-item{padding:10px;background:#18203d;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+    .dl-item{padding:10px;background:#18203d;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .dl-left{display:flex;align-items:center;gap:10px}
     .badge{padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border2);color:#dbe2ff;background:#1c2a5f}
     .meta{font-size:13px;color:#cfd6ff}
-    a.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold}
+    a.dl-btn,button.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold;border:0;cursor:pointer}
+    .hint{font-size:12px;color:#9aa7d3;margin-top:8px}
+    .hidden{display:none!important}
   </style>
 
-  <!-- دعم تشغيل M3U8 -->
-  https://cdn.jsdelivr.net/npm/hls.js@latest
+  <!-- hls.js لدعم تشغيل M3U8 على المتصفحات التي لا تدعمه أصلاً -->
+  https://cdn.jsdelivr.net/npm/hls.js@latest</script>
 </head>
 
 <body>
@@ -52,40 +55,191 @@
     <h3>ضع رابط فيديو مباشر ثم اضغط تشغيل</h3>
 
     <div class="row">
-      <input id="url" type="text" placeholder="مثال: https://site.com/video.mp4 أو m3u8 أو webm">
-      <button onclick="playAnyVideo()">تشغيل</button>
+      <input id="url" type="text" placeholder="مثال: https://example.com/video.mp4 أو https://example.com/live/index.m3u8">
+      <button id="playBtn" type="button">تشغيل</button>
     </div>
 
-    <div class="msg"></div>
-
-    <div class="player" style="display:none;">
-      <div class="ratio"></div>
+    <div id="msg" class="msg hint">
+      ملاحظة: يجب أن يكون الرابط مباشر لملف فيديو (mp4 / webm / m3u8) ويفضّل https لتجنّب حظر Mixed Content.
     </div>
 
-    <div class="dl-box">
-      <h3>خيارات التحميل</h3>
-      <div class="dl-list"></div>
+    <div class="player hidden" id="playerBox">
+      <div class="ratio">
+        <video id="video" controls crossorigin="anonymous" playsinline></video>
+      </div>
+    </div>
+
+    <div id="dlBox" class="dl-box hidden">
+      <div class="dl-header">
+        <h3 style="margin:0">خيارات التحميل</h3>
+        <small class="hint">إن فشل التحميل، فالسيرفر يمنع CORS أو التحميل المباشر.</small>
+      </div>
+      <div class="dl-list" id="dlList"></div>
     </div>
   </div>
 
 <script>
-function playAnyVideo() {
-    const url = document.getElementById("url").value.trim();
-    const msg = document.querySelector(".msg");
-    const player = document.querySelector(".player");
-    const ratio = document.querySelector(".ratio");
-    const dlBox = document.querySelector(".dl-box");
-    const dlList = document.querySelector(".dl-list");
+(function(){
+  const input = document.getElementById('url');
+  const playBtn = document.getElementById('playBtn');
+  const msg = document.getElementById('msg');
+  const playerBox = document.getElementById('playerBox');
+  const video = document.getElementById('video');
+  const dlBox = document.getElementById('dlBox');
+  const dlList = document.getElementById('dlList');
 
-    if (!url) {
-        msg.innerHTML = "<span class='err'>⚠️ الرجاء إدخال رابط فيديو</span>";
-        return;
+  // أدوات مساعدة
+  const isHttpsPage = location.protocol === 'https:';
+  const isHls = (u) => /\.m3u8(\?|#|$)/i.test(u);
+  const isDirect = (u) => /\.(mp4|webm|mkv|m4v)(\?|#|$)/i.test(u) || isHls(u);
+  const toHttps = (u) => u.replace(/^http:\/\//i, 'https://');
+
+  function showError(text){
+    msg.innerHTML = '❌ <span class="err">' + text + '</span>';
+  }
+  function showInfo(text){
+    msg.innerHTML = 'ℹ️ ' + text;
+  }
+
+  function validateUrl(u){
+    try{
+      new URL(u);
+      return true;
+    }catch(e){ return false; }
+  }
+
+  function prepareDownloadUI(url){
+    dlList.innerHTML = '';
+    dlBox.classList.remove('hidden');
+
+    // 1) زر تحميل بالرابط الأصلي
+    addDownloadRow('الرابط الأصلي', url, true);
+
+    // 2) أزرار جودات شائعة (تخمينية بالاسم فقط — تعمل إذا كان السيرفر يعتمد نفس النمط)
+    const qualities = ['1080p','720p','480p','360p'];
+    qualities.forEach(q=>{
+      // نحاول استبدال أي رقم جودة في الاسم إن وجد
+      let guessed = url
+        .replace(/(\d{3,4}p)/i, q)
+        .replace(/_(\d{3,4})\./, `_${q.replace('p','')}.`)
+        .replace(/-(\d{3,4})\./, `-${q.replace('p','')}.`);
+
+      // إن لم يتغير شيء، نتركه كما هو (قد لا تتوافر جودة)
+      addDownloadRow(`جودة ${q}`, guessed, false);
+    });
+  }
+
+  function addDownloadRow(label, href, primary){
+    const row = document.createElement('div');
+    row.className = 'dl-item';
+
+    const left = document.createElement('div');
+    left.className = 'dl-left';
+
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = label;
+
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = primary ? 'قد لا يعمل إذا منع السيرفر التحميل الخارجي (CORS).' : 'محاولة تخمين جودة بالاسم.';
+
+    left.appendChild(badge);
+    left.appendChild(meta);
+
+    const right = document.createElement('div');
+
+    // رابط تحميل مباشر (سيعمل فقط إذا سمح CORS أو كان نفس النطاق)
+    const a = document.createElement('a');
+    a.className = 'dl-btn';
+    a.href = href;
+    a.download = '';
+    a.textContent = 'تحميل مباشر';
+    a.rel = 'noopener';
+    right.appendChild(a);
+
+    row.appendChild(left);
+    row.appendChild(right);
+
+    dlList.appendChild(row);
+  }
+
+  async function play(){
+    let url = input.value.trim();
+
+    if(!url){
+      showError('الرجاء إدخال رابط فيديو مباشر');
+      return;
+    }
+    if(!validateUrl(url)){
+      showError('الرابط غير صالح. تأكد أنه يبدأ بـ http أو https');
+      return;
     }
 
-    msg.innerHTML = "";
-    player.style.display = "block";
+    // منع Mixed Content: إن كانت الصفحة https والرابط http سنحوّله لـ https (إن كان متاحًا)
+    if(isHttpsPage && url.startsWith('http://')){
+      const httpsCandidate = toHttps(url);
+      showInfo('تم تحويل الرابط إلى HTTPS لمحاولة تجنّب الحظر (Mixed Content).');
+      url = httpsCandidate;
+    }
 
-    // تنظيف المشغل القديم
-    ratio.innerHTML = "";
+    // تحقّق أنه رابط مباشر لملف فيديو
+    if(!isDirect(url)){
+      showError('هذا ليس رابط ملف فيديو مباشر (mp4/webm/m3u8). الروابط من المنصات (YouTube/Vimeo/Drive) غير مباشرة.');
+      playerBox.classList.add('hidden');
+      dlBox.classList.add('hidden');
+      return;
+    }
 
-    // إنشاء عنصر فيديو
+    // إظهار المشغل
+    playerBox.classList.remove('hidden');
+    video.src = '';
+    video.removeAttribute('src'); // تنظيف
+
+    // تشغيل حسب النوع
+    if(isHls(url)){
+      // m3u8: استخدم hls.js إن كان مدعومًا
+      if (window.Hls && Hls.isSupported()){
+        const hls = new Hls();
+        hls.on(Hls.Events.ERROR, function(event, data){
+          console.warn('HLS error', data);
+          if(data && data.details){
+            showError('فشل تشغيل HLS: ' + data.details + ' — قد يكون السبب CORS من السيرفر.');
+          }else{
+            showError('فشل تشغيل HLS — تحقق من السماح عبر CORS.');
+          }
+        });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+      } else {
+        // بعض المتصفحات تدعم HLS أصلاً (Safari)
+        video.src = url;
+      }
+    }else{
+      // mp4/webm/mkv/m4v
+      // تعيين نوع تقريبي يفيد بعض المتصفحات
+      const type = /\.webm(\?|#|$)/i.test(url) ? 'video/webm' : 'video/mp4';
+      video.src = url;
+      video.type = type;
+    }
+
+    // إعداد التحميل
+    prepareDownloadUI(url);
+
+    // رسائل إرشادية محتملة
+    showInfo(
+`تم تجهيز المشغل.
+إن ظهر شاشة سوداء أو لم يبدأ التشغيل:
+• تأكد أن الرابط يعمل مباشرة في المتصفح (افتحه في تبويب جديد).
+• تأكد أن الرابط HTTPS إذا كانت صفحتك HTTPS (GitHub Pages).
+• إن فشل التحميل أو التشغيل من نطاق خارجي، غالبًا يمنع السيرفر CORS.`
+    );
+  }
+
+  playBtn.addEventListener('click', play);
+  input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') play(); });
+})();
+</script>
+
+</body>
+</html>
