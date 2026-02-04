@@ -1,169 +1,33 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
+<!DOCTYPE html>
+<html lang="ar">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>مشغّل بسيط (YouTube + MP4 + HLS)</title>
+<meta charset="UTF-8">
+<title>Test YouTube API</title>
 
-  <style>
-    body{margin:0;background:#0b1020;color:#fff;font-family:Tahoma,Arial,sans-serif}
-    .wrap{max-width:900px;margin:20px auto;padding:16px;background:#121a33;border:1px solid rgba(255,255,255,.15);border-radius:14px}
-    h3{margin:0 0 12px}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    input{flex:1 1 520px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);
-          background:rgba(0,0,0,.25);color:#fff;outline:none;direction:ltr}
-    button{padding:11px 14px;border-radius:10px;border:0;background:#5b8cff;color:#07102a;font-weight:700;cursor:pointer}
-    .msg{margin-top:10px;color:#a9b3d6;font-size:13px;line-height:1.8;white-space:pre-wrap}
-    .err{color:#ff5b6a}
-    .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.15);background:#000}
-    .ratio{position:relative;padding-top:56.25%}
-    video,iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
-    video{display:none}
-    #yt{display:none}
-  </style>
+<style>
+body{background:#000;color:#fff;font-family:Tahoma;padding:20px}
+#ytplayer{width:100%;height:360px;background:#111}
+</style>
 
-  <!-- مكتبة HLS الصحيحة -->
-  https://cdn.jsdelivr.net/npm/hls.js@latest</script>
-  <!-- IFrame API ليوتيوب -->
-  <script src="https://www.youtube.com/"></script>
-</head>
-<body>
-  <div class="wrap">
-    <h3>أدخل رابط YouTube / m3u8 / mp4 ثم اضغط تشغيل</h3>
-    <div class="row">
-      <input id="url" placeholder="https://www.youtube.com/watch?v=M7lc1UVf-VE أو https://example.com/master.m3u8 أو https://example.com/video.mp4">
-      <button id="go">تشغيل</button>
-    </div>
-    <div id="msg" class="msg">تنبيه: يجب أن تكون كل الروابط عبر <b>https://</b> لتجنّب Mixed Content.</div>
-
-    <div class="player" id="playerBox" style="display:none">
-      <div class="ratio">
-        <div id="yt"></div>
-        <video id="vid" controls playsinline crossorigin="anonymous"></video>
-      </div>
-    </div>
-  </div>
+<!-- هذا السطر مهم جداً ويجب ألا يُنسى -->
+<script src="https://www.youtube.com/"></script>
 
 <script>
-(() => {
-  const $ = (id) => document.getElementById(id);
-  const input = $('url'), go = $('go'), msg = $('msg'), box = $('playerBox');
-  const ytDiv = $('yt'), video = $('vid');
+let player;
 
-  let H = null;      // hls.js instance
-  let ytReady = false;
-  let player = null; // YT.Player
-
-  // YouTube API readiness (لازم تكون جلوبال)
-  window.onYouTubeIframeAPIReady = function(){
-    ytReady = true;
-  };
-
-  const isHttpsPage = location.protocol === 'https:';
-  const toHttps = (u) => u.replace(/^http:\/\//i,'https://');
-
-  const isHls  = (u)=> /\.m3u8(\?|#|$)/i.test(u);
-  const isMp4  = (u)=> /\.(mp4|webm|m4v)(\?|#|$)/i.test(u);
-  const isYT   = (u)=> {
-    try{
-      const h = new URL(u, location.href).hostname;
-      return /(^|\.)youtube\.com$/i.test(h) || /(^|\.)youtu\.be$/i.test(h);
-    }catch{ return /youtu\.be|youtube\.com/i.test(u); }
-  };
-  const ytId = (u)=> {
-    try{
-      const url = new URL(u, location.href);
-      if(url.hostname.endsWith('youtu.be')) return url.pathname.replace('/','').split(/[?&#]/)[0];
-      if(url.pathname.startsWith('/embed/')) return url.pathname.split('/embed/')[1].split(/[?&#]/)[0];
-      if(url.pathname.startsWith('/shorts/')) return url.pathname.split('/shorts/')[1].split(/[?&#]/)[0];
-      const v = url.searchParams.get('v'); if(v) return v;
-    }catch{}
-    const m = String(u).match(/(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([A-Za-z0-9_\-]{6,})/);
-    return m ? m[1] : null;
-  };
-
-  function info(t){ msg.innerHTML = 'ℹ️ ' + t; }
-  function error(t){ msg.innerHTML = '❌ <span class="err">'+t+'</span>'; }
-
-  function clear(){
-    if(H){ try{ H.destroy(); }catch{} H=null; }
-    if(player && player.stopVideo){ try{ player.stopVideo(); }catch{} }
-    video.pause(); video.removeAttribute('src'); while(video.firstChild) video.removeChild(video.firstChild); video.load();
-    video.style.display='none';
-    ytDiv.style.display='none';
-  }
-
-  function playYT(id){
-    box.style.display='block';
-    ytDiv.style.display='block';
-    video.style.display='none';
-    if(!ytReady){
-      info('جاري تحميل YouTube API…'); 
-      const wait = setInterval(()=>{ if(ytReady){ clearInterval(wait); playYT(id); } }, 200);
-      return;
-    }
-    if(!player){
-      player = new YT.Player('yt', {
-        width:'100%', height:'100%',
-        videoId: id,
-        playerVars: { playsinline:1, modestbranding:1, rel:0, enablejsapi:1, origin: location.origin },
-        events: { onReady: (e)=>{ try{e.target.playVideo();}catch{}; } }
-      });
-    }else{
-      player.loadVideoById(id);
-    }
-    info('تم تفعيل مشغّل YouTube (تشغيل فقط).');
-  }
-
-  function playHls(u){
-    box.style.display='block';
-    video.style.display='block';
-    ytDiv.style.display='none';
-    if(window.Hls && window.Hls.isSupported()){
-      H = new Hls();
-      H.loadSource(u);
-      H.attachMedia(video);
-      H.on(Hls.Events.MANIFEST_PARSED, ()=> { video.play().catch(()=>{}); });
-      info('تم تحميل HLS عبر hls.js');
-    } else if (video.canPlayType('application/vnd.apple.mpegURL')) {
-      video.src = u;
-      video.addEventListener('loadedmetadata', ()=> video.play().catch(()=>{}), {once:true});
-      info('تشغيل HLS بالدعم الأصلي للمتصفح.');
-    } else {
-      error('متصفحك لا يدعم HLS ولم نستطع تحميل hls.js.');
-    }
-  }
-
-  function playFile(u){
-    box.style.display='block';
-    video.style.display='block';
-    ytDiv.style.display='none';
-    video.src = u;
-    video.addEventListener('loadedmetadata', ()=> video.play().catch(()=>{}), {once:true});
-    info('تشغيل ملف مباشر.');
-  }
-
-  go.addEventListener('click', ()=>{
-    let u = input.value.trim().replace(/\?+$/,'');
-    if(!u){ return error('أدخل رابط فيديو.'); }
-    try{ u = new URL(u, location.href).toString(); } catch{ return error('الرابط غير صالح.'); }
-    if(isHttpsPage && /^http:\/\//i.test(u)) { u = toHttps(u); info('تم تحويل http إلى https لتجنب Mixed Content.'); }
-
-    clear();
-
-    if(isYT(u)){
-      const id = ytId(u);
-      if(!id) return error('تعذّر استخراج معرف YouTube من الرابط.');
-      return playYT(id);
-    }
-    if(isHls(u))  return playHls(u);
-    if(isMp4(u))  return playFile(u);
-    return error('الرابط يجب أن يكون YouTube أو ينتهي بـ mp4 / webm / m3u8.');
+function onYouTubeIframeAPIReady(){
+  document.getElementById("status").innerHTML = "تم تحميل YouTube API ✓";
+  player = new YT.Player('ytplayer', {
+    videoId: 'QhIB8QZVLNE',
+    playerVars: { playsinline:1, modestbranding:1 }
   });
-
-  input.addEventListener('keydown', e => { if(e.key==='Enter') go.click(); });
-
-})();
+}
 </script>
+</head>
+
+<body>
+<h3>اختبار YouTube API</h3>
+<div id="status">جاري تحميل YouTube API…</div>
+<div id="ytplayer"></div>
 </body>
 </html>
