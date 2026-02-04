@@ -9,25 +9,29 @@ body{background:#000;color:#fff;font-family:Tahoma;padding:20px}
 #ytplayer{width:100%;height:360px;background:#111}
 </style>
 
-<!-- هذا السطر مهم جداً ويجب ألا يُنسى -->
+<!-- تحميل API بشكل صحيح -->
 <script src="https://www.youtube.com/"></script>
 
 <script>
-let player;
+// يجب أن تكون الدالة موجودة في GLOBAL SCOPE
+var player;
 
 function onYouTubeIframeAPIReady(){
-  document.getElementById("status").innerHTML = "تم تحميل YouTube API ✓";
+  document.getElementById("status").innerHTML = "✔ تم تحميل YouTube API";
+
   player = new YT.Player('ytplayer', {
     videoId: 'QhIB8QZVLNE',
-    playerVars: { playsinline:1, modestbranding:1 }
+    playerVars: { playsinline: 1 }
   });
 }
 </script>
+
 </head>
 
 <body>
 <h3>اختبار YouTube API</h3>
 <div id="status">جاري تحميل YouTube API…</div>
+
 <div id="ytplayer"></div>
 </body>
 </html>
