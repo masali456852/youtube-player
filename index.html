@@ -3,22 +3,640 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>مشغّل ذكي: روابط مباشرة + YouTube/Vimeo/TikTok/Facebook</title>
+  <title>Super Player — مباشر + HLS + DASH + YouTube/Vimeo/TikTok/Facebook</title>
 
   <style>
     :root{
-      --bg:#0b1020; --card:#121a33; --muted:#a9b3d6; --accent:#5b8cff;
-      --danger:#ff5b6a; --border:rgba(255,255,255,.15); --border2:rgba(255,255,255,.2);
-      --ok:#36d399;
+      --bg:#0b1020; --text:#ffffff; --muted:#a9b3d6; --card:#121a33;
+      --accent:#5b8cff; --danger:#ff5b6a; --ok:#36d399;
+      --border:rgba(255,255,255,.14); --border2:rgba(255,255,255,.2);
+      --pill:#1c2a5f; --chip:#0c1535;
+    }
+    body.light{
+      --bg:#f6f7fb; --text:#0a1024; --muted:#44506e; --card:#ffffff;
+      --accent:#3b6cff; --danger:#d12e45; --ok:#1db980;
+      --border:rgba(0,0,0,.12); --border2:rgba(0,0,0,.18);
+      --pill:#e9efff; --chip:#eef2ff;
     }
     *{box-sizing:border-box}
-    body{font-family:Tahoma,Arial,sans-serif;background:var(--bg);color:#fff;margin:0;padding:20px}
-    .box{max-width:980px;margin:auto;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
-    h3{margin:0 0 12px}
+    body{
+      margin:0; padding:20px; background:var(--bg); color:var(--text);
+      font-family:Tahoma,Arial,sans-serif;
+    }
+    h3{margin:0 0 10px}
+    .container{max-width:1200px;margin:auto}
     .row{display:flex;gap:10px;flex-wrap:wrap}
     input{
-      flex:1 1 520px;padding:12px;border-radius:10px;border:1px solid var(--border2);
-      background:rgba(0,0,0,.25);color:#fff;outline:none;direction:ltr
+      flex:1 1 600px; padding:12px; border-radius:10px; border:1px solid var(--border2);
+      background:rgba(0,0,0,.05); color:var(--text); outline:none; direction:ltr
     }
     button{
-      padding:11px 14px;border-radius:10px;border:0;background:var(--accent);
+      padding:11px 14px; border-radius:10px; border:1px solid var(--border2);
+      background:var(--accent); color:#fff; font-weight:700; cursor:pointer
+    }
+    .btn-ghost{background:transparent; color:var(--text)}
+    .btn-danger{background:var(--danger); border-color:transparent}
+    .btn-ok{background:var(--ok); border-color:transparent}
+    .box{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px}
+    .msg{margin-top:8px; color:var(--muted); font-size:13px; line-height:1.8; white-space:pre-wrap}
+    .err{color:var(--danger)}
+    .grid{
+      display:grid; grid-template-columns:2fr 1fr; gap:14px; margin-top:16px
+    }
+    @media(max-width:992px){ .grid{grid-template-columns:1fr} }
+    .player-card{padding:0}
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:10px 12px; border-bottom:1px solid var(--border);
+      background:linear-gradient(0deg, transparent, rgba(0,0,0,.06))
+    }
+    .source{display:flex;align-items:center;gap:10px;min-width:0}
+    .badge{padding:3px 10px; border-radius:999px; font-size:12px; color:#dbe2ff;
+           border:1px solid var(--border2); background:var(--pill)}
+    .urltxt{font-size:12px; color:#cfd6ff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:48vw; direction:ltr}
+    body.light .badge{color:#223; background:var(--pill)}
+    body.light .urltxt{color:#334}
+    .bar-btns{display:flex;gap:8px;flex-wrap:wrap}
+    .ratio{position:relative; padding-top:56.25%} /* 16:9 */
+    video, iframe, #ytWrap{position:absolute; inset:0; width:100%; height:100%; border:0; background:#000}
+    #ytWrap{display:none}
+    #embedFrame{display:none}
+    video{display:none; background:#000}
+
+    .section-title{margin:8px 0 6px; font-size:14px; color:#cfd6ff}
+    body.light .section-title{color:#233}
+    .dl-list{display:flex; flex-direction:column; gap:8px}
+    .dl-item{padding:10px; background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:8px;
+             display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap}
+    .dl-left{display:flex; align-items:center; gap:10px}
+    .meta{font-size:13px; color:#cfd6ff; direction:ltr}
+    body.light .meta{color:#223}
+    .row-btns{display:flex; gap:8px; flex-wrap:wrap}
+    a.dl-btn,button.dl-btn,select.dl-btn{
+      color:#fff; background:var(--accent); padding:8px 12px; border-radius:6px; text-decoration:none; font-weight:bold; border:0; cursor:pointer
+    }
+    select.dl-btn{appearance:none}
+    .hidden{display:none!important}
+    code{background:var(--chip); border:1px solid var(--border2); padding:2px 6px; border-radius:6px; color:inherit}
+
+    .stat{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+    .stat .k{font-size:12px; color:var(--muted)}
+    .stat .v{font-weight:bold}
+
+    .history-list{display:flex; flex-direction:column; gap:8px; max-height:360px; overflow:auto}
+    .history-item{display:flex; gap:8px; align-items:center; justify-content:space-between; border:1px solid var(--border); border-radius:8px; padding:8px}
+    .history-url{direction:ltr; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60%}
+    .pill{display:inline-flex; align-items:center; gap:8px; background:var(--chip); border:1px solid var(--border2); color:#cfd6ff; padding:6px 10px; border-radius:999px; font-size:12px}
+    body.light .pill{color:#223}
+  </style>
+
+  <!-- مكتبات التشغيل -->
+  https://cdn.jsdelivr.net/npm/hls.js@latest</script>
+  <script src="https://cdn.jsdelivr.net/npm/dashjsdash.all.min.js</script>
+  <script src="https://www.youtube.com/iframe_apiead>
+
+<body>
+  <div class="container">
+    <div class="box">
+      <div class="row">
+        <input id="url" type="text"
+          placeholder="mp4 / webm / m3u8 / mpd أو روابط YouTube / Vimeo / TikTok / Facebook (watch/embed/shorts/video)">
+        <div class="row" style="gap:8px">
+          <button id="playBtn">تشغيل</button>
+          <button id="themeBtn" class="btn-ghost" title="تبديل الوضع">🌙/☀️</button>
+        </div>
+      </div>
+      <div id="msg" class="msg">
+        • **التنزيل متاح فقط** للروابط المباشرة (MP4/WEBM/M3U8/MPD حيث يسمح المصدر).<br>
+        • YouTube/Vimeo/TikTok/Facebook للتشغيل داخل iframe فقط، احترامًا لشروط الخدمة.
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- المشغّل الكبير -->
+      <div class="box player-card" id="playerCard">
+        <div class="topbar">
+          <div class="source">
+            <span id="srcBadge" class="badge">—</span>
+            <span id="srcUrl" class="urltxt"></span>
+          </div>
+          <div class="bar-btns">
+            <button id="copyBtn">نسخ الرابط</button>
+            #<button>فتح</button></a>
+          </div>
+        </div>
+        <div class="ratio">
+          <div id="ytWrap"><div id="ytPlayer"></div></div>
+          <iframe id="embedFrame" allow="autoplay; encrypted-media; picture-in-picture; clipboard-write; web-share" allowfullscreen></iframe>
+          <video id="video" controls playsinline crossorigin="anonymous"></video>
+        </div>
+      </div>
+
+      <!-- اللوحة الجانبية: معلومات + تاريخ -->
+      <div class="box">
+        <h3>معلومات الفيديو</h3>
+        <div class="stat" style="margin-top:8px">
+          <div><div class="k">الطول</div><div id="infoDuration" class="v">—</div></div>
+          <div><div class="k">الأبعاد</div><div id="infoSize" class="v">—</div></div>
+          <div><div class="k">حجم الملف</div><div id="infoBytes" class="v">—</div></div>
+          <div><div class="k">المصدر</div><div id="infoSource" class="v">—</div></div>
+        </div>
+
+        <div style="margin-top:12px" class="row">
+          <button id="btnShot" class="btn-ok">📸 لقطة شاشة</button>
+          <button id="btnThumb" class="btn-ok">📷 استخراج صورة من الإطار الحالي</button>
+          <button id="btnClear" class="btn-ghost">تفريغ المشغّل</button>
+        </div>
+
+        <div class="note" style="margin-top:10px">
+          <span class="pill">تلميح</span> لقطة الشاشة تعمل فقط مع الفيديو المباشر داخل &lt;video&gt; (MP4/WEBM/HLS/DASH)، وليس مع مشغلات iframe.
+        </div>
+
+        <hr style="opacity:.15; margin:16px 0">
+
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <h3 style="margin:0">آخر الروابط</h3>
+          <div class="row" style="gap:8px">
+            <button id="btnLoadSamples" class="btn-ghost">أمثلة</button>
+            <button id="btnClearHistory" class="btn-danger">مسح السجل</button>
+          </div>
+        </div>
+        <div id="history" class="history-list" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <!-- التحميل والجودات -->
+    <div id="panels" class="row" style="margin-top:14px">
+      <div id="dlBox" class="box hidden" style="flex:1 1 520px">
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <h3 style="margin:0">خيارات التحميل</h3>
+          <small class="msg">قد يفشل بسبب CORS من المصدر.</small>
+        </div>
+        <div class="section-title">روابط مباشرة</div>
+        <div class="dl-list" id="dlList"></div>
+      </div>
+
+      <div id="hlsBox" class="box hidden" style="flex:1 1 320px">
+        <h3 style="margin:0">جودات HLS (m3u8)</h3>
+        <div class="dl-list" id="hlsList" style="margin-top:10px"></div>
+        <div class="msg">للحفظ النهائي من m3u8 (إن سمح المصدر): <code>ffmpeg -i "URL.m3u8" -c copy out.mp4</code></div>
+      </div>
+
+      <div id="dashBox" class="box hidden" style="flex:1 1 320px">
+        <h3 style="margin:0">جودات DASH (mpd)</h3>
+        <div class="row" style="gap:8px; margin-top:10px">
+          <select id="dashQuality" class="dl-btn" style="min-width:180px">
+            <option value="auto">تلقائي</option>
+          </select>
+          <button id="dashApply" class="dl-btn">تطبيق الجودة</button>
+        </div>
+        <div class="msg">يمكنك تعطيل التلقائي واختيار جودة محددة.</div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+(function(){
+  // عناصر واجهة
+  const input = document.getElementById('url');
+  const playBtn = document.getElementById('playBtn');
+  const msg = document.getElementById('msg');
+  const themeBtn = document.getElementById('themeBtn');
+
+  const srcBadge = document.getElementById('srcBadge');
+  const srcUrlTxt = document.getElementById('srcUrl');
+  const copyBtn = document.getElementById('copyBtn');
+  const openBtn = document.getElementById('openBtn');
+
+  const video = document.getElementById('video');
+  const ytWrap = document.getElementById('ytWrap');
+  const embedFrame = document.getElementById('embedFrame');
+  const playerCard = document.getElementById('playerCard');
+
+  const infoDuration = document.getElementById('infoDuration');
+  const infoSize = document.getElementById('infoSize');
+  const infoBytes = document.getElementById('infoBytes');
+  const infoSource = document.getElementById('infoSource');
+
+  const btnShot = document.getElementById('btnShot');
+  const btnThumb = document.getElementById('btnThumb');
+  const btnClear = document.getElementById('btnClear');
+
+  const dlBox = document.getElementById('dlBox');
+  const dlList = document.getElementById('dlList');
+  const hlsBox = document.getElementById('hlsBox');
+  const hlsList = document.getElementById('hlsList');
+  const dashBox = document.getElementById('dashBox');
+  const dashQuality = document.getElementById('dashQuality');
+  const dashApply = document.getElementById('dashApply');
+
+  const historyWrap = document.getElementById('history');
+  const btnClearHistory = document.getElementById('btnClearHistory');
+  const btnLoadSamples = document.getElementById('btnLoadSamples');
+
+  // حالات
+  let currentHls = null;
+  let dashPlayer = null;
+  let ytApiReady = false;
+  let ytPlayer = null;
+  let pendingYtId = null;
+  let currentKind = null; // 'direct'|'hls'|'dash'|'youtube'|'vimeo'|'tiktok'|'facebook'
+
+  // YouTube API readiness
+  window.onYouTubeIframeAPIReady = function(){ ytApiReady = true; if(pendingYtId){ createOrLoadYt(pendingYtId); pendingYtId=null; } };
+
+  // =========== أدوات مساعدة ===========
+  const isHttpsPage = location.protocol === 'https:';
+  const toHttps = (u)=> u.replace(/^http:\/\//i,'https://');
+  const cleanUrl = (u)=> (u||'').trim().replace(/\s+/g,'').replace(/\?+$/,'');
+  function validateUrl(u){ try{ new URL(u, location.href); return true; }catch{ return false; } }
+  function absUrl(u){ try{ return new URL(u, location.href).toString(); }catch{ return u; } }
+  function host(u){ try{ return new URL(u).hostname; }catch{ return ''; } }
+
+  const isHls   = (u)=> /\.m3u8(\?|#|$)/i.test(u);
+  const isDash  = (u)=> /\.mpd(\?|#|$)/i.test(u);
+  const isFile  = (u)=> /\.(mp4|webm|m4v)(\?|#|$)/i.test(u);
+
+  const isYouTube = (u)=> /(^|\.)youtube\.com$/i.test(host(u)) || /(^|\.)youtu\.be$/i.test(host(u));
+  const isVimeo   = (u)=> /(^|\.)vimeo\.com$/i.test(host(u)) || /(^|\.)player\.vimeo\.com$/i.test(host(u));
+  const isTikTok  = (u)=> /(^|\.)tiktok\.com$/i.test(host(u)) || /(^|\.)vm\.tiktok\.com$/i.test(host(u));
+  const isFB      = (u)=> /(^|\.)facebook\.com$/i.test(host(u)) || /(^|\.)fb\.watch$/i.test(host(u));
+
+  function showError(t){ msg.innerHTML = '❌ <span class="err">'+t+'</span>'; }
+  function showInfo(t){ msg.innerHTML = 'ℹ️ '+t; }
+
+  function setTopBar(kind, url){
+    const map = {direct:'ملف مباشر', hls:'HLS (m3u8)', dash:'DASH (mpd)', youtube:'YouTube', vimeo:'Vimeo', tiktok:'TikTok', facebook:'Facebook'};
+    currentKind = kind;
+    srcBadge.textContent = map[kind] || '—';
+    srcUrlTxt.textContent = url;
+    openBtn.href = url;
+    copyBtn.onclick = async ()=>{ try{ await navigator.clipboard.writeText(url); copyBtn.textContent='تم النسخ ✓'; setTimeout(()=>copyBtn.textContent='نسخ الرابط',1200);}catch{ alert('تعذّر النسخ'); } };
+    infoSource.textContent = map[kind] || '—';
+  }
+
+  function resetPanels(){
+    // توقف HLS/DASH/YT
+    if(currentHls){ try{ currentHls.destroy(); }catch{} currentHls=null; }
+    if(dashPlayer){ try{ dashPlayer.reset(); }catch{} dashPlayer=null; }
+    if(ytPlayer && ytPlayer.stopVideo){ try{ ytPlayer.stopVideo(); }catch{} }
+
+    // إخفاء العناصر
+    video.style.display = 'none';
+    video.pause(); video.removeAttribute('src'); while(video.firstChild) video.removeChild(video.firstChild); video.load();
+    ytWrap.style.display = 'none';
+    embedFrame.style.display = 'none'; embedFrame.removeAttribute('src');
+
+    // صناديق
+    dlBox.classList.add('hidden');
+    hlsBox.classList.add('hidden');
+    dashBox.classList.add('hidden');
+    dlList.innerHTML = '';
+    hlsList.innerHTML = '';
+    dashQuality.innerHTML = '<option value="auto">تلقائي</option>';
+
+    // معلومات
+    infoDuration.textContent = '—';
+    infoSize.textContent = '—';
+    infoBytes.textContent = '—';
+  }
+
+  // =========== السجل (History) ===========
+  const LS_KEY = 'super_player_history_v1';
+  function loadHistory(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'[]'); }catch{ return []; } }
+  function saveHistory(it){
+    const list = loadHistory().filter(x=>x.url!==it.url);
+    list.unshift({...it, at: Date.now()});
+    while(list.length>10) list.pop();
+    localStorage.setItem(LS_KEY, JSON.stringify(list));
+    renderHistory();
+  }
+  function renderHistory(){
+    const list = loadHistory();
+    historyWrap.innerHTML = '';
+    if(!list.length){ historyWrap.innerHTML = '<div class="msg">لا يوجد سجل بعد.</div>'; return; }
+    list.forEach(rec=>{
+      const row = document.createElement('div'); row.className='history-item';
+      const left = document.createElement('div');
+      const t = new Date(rec.at);
+      left.innerHTML = `<div class="history-url">${rec.url}</div><div class="msg">${t.toLocaleString()}</div>`;
+      const btn = document.createElement('button'); btn.textContent='تشغيل'; btn.onclick=()=>{ input.value = rec.url; playBtn.click(); };
+      row.appendChild(left); row.appendChild(btn);
+      historyWrap.appendChild(row);
+    });
+  }
+  btnClearHistory.onclick = ()=>{ localStorage.removeItem(LS_KEY); renderHistory(); showInfo('تم مسح السجل.'); };
+  btnLoadSamples.onclick = ()=>{
+    input.value = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'; // مثال HLS
+    playBtn.click();
+    setTimeout(()=>{ input.value='https://dash.akamaized.net/envivio/EnvivioDash3/manifest.mpd'; }, 2000);
+  };
+  renderHistory();
+
+  // =========== الثيم ===========
+  const THEME_KEY = 'super_player_theme';
+  function applyTheme(v){ document.body.classList.toggle('light', v==='light'); localStorage.setItem(THEME_KEY, v); }
+  applyTheme(localStorage.getItem(THEME_KEY)||'dark');
+  themeBtn.onclick = ()=>{ applyTheme(document.body.classList.contains('light') ? 'dark' : 'light'); };
+
+  // =========== معلومات الفيديو + حجم الملف ===========
+  function formatTime(sec){ if(!isFinite(sec)) return '—'; const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=Math.floor(sec%60); return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); }
+  function formatBytes(b){ if(!b || !isFinite(b)) return '—'; const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024 && i<u.length-1){ b/=1024; i++; } return b.toFixed(2)+' '+u[i]; }
+  async function fetchHeadSize(url){
+    try{
+      const r = await fetch(url, { method:'HEAD', mode:'cors' });
+      const len = r.headers.get('content-length');
+      return len ? Number(len) : null;
+    }catch{ return null; }
+  }
+  function attachVideoInfoHandlers(){
+    video.onloadedmetadata = ()=>{
+      infoDuration.textContent = formatTime(video.duration);
+      infoSize.textContent = `${video.videoWidth || '—'}×${video.videoHeight || '—'}`;
+    };
+  }
+  attachVideoInfoHandlers();
+
+  // =========== أدوات الصور ===========
+  function captureFrame(){
+    if(video.style.display==='none'){ alert('الميزة متاحة فقط مع مشغل الفيديو المباشر.'); return; }
+    const w = video.videoWidth, h = video.videoHeight;
+    if(!w || !h){ alert('الفيديو غير جاهز بعد.'); return; }
+    const cv = document.createElement('canvas'); cv.width=w; cv.height=h;
+    const ctx = cv.getContext('2d'); ctx.drawImage(video, 0, 0, w, h);
+    const url = cv.toDataURL('image/png');
+    const a = document.createElement('a'); a.href=url; a.download='screenshot.png'; a.click();
+  }
+  btnShot.onclick = captureFrame;
+  btnThumb.onclick = captureFrame; // نلتقط الإطار الحالي كصورة مصغّرة
+
+  btnClear.onclick = ()=>{ resetPanels(); srcBadge.textContent='—'; srcUrlTxt.textContent=''; showInfo('تم تفريغ المشغّل.'); };
+
+  // =========== YouTube ===========
+  function extractYtId(u){
+    try{
+      const url = new URL(u, location.href);
+      if(url.hostname.endsWith('youtu.be')) return url.pathname.replace('/','').split(/[?&#]/)[0];
+      if(url.pathname.startsWith('/embed/')) return url.pathname.split('/embed/')[1].split(/[?&#]/)[0];
+      if(url.pathname.startsWith('/shorts/')) return url.pathname.split('/shorts/')[1].split(/[?&#]/)[0];
+      const v = url.searchParams.get('v'); if(v) return v;
+    }catch{}
+    const m = String(u).match(/(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([A-Za-z0-9_\-]{6,})/);
+    return m ? m[1] : null;
+  }
+  function createOrLoadYt(id){
+    ytWrap.style.display = 'block';
+    if(!ytPlayer){
+      ytPlayer = new YT.Player('ytPlayer', {
+        videoId:id,
+        playerVars:{playsinline:1,modestbranding:1,rel:0},
+        events:{onReady:()=>{ try{ ytPlayer.playVideo(); }catch{}; }, onStateChange:()=>{}}
+      });
+    }else{
+      ytPlayer.loadVideoById(id);
+    }
+  }
+
+  // =========== HLS ===========
+  function playHls(url){
+    video.style.display='block'; ytWrap.style.display='none'; embedFrame.style.display='none';
+    if(window.Hls && window.Hls.isSupported()){
+      currentHls = new Hls();
+      currentHls.attachMedia(video);
+      currentHls.on(Hls.Events.MEDIA_ATTACHED, ()=> currentHls.loadSource(url));
+      currentHls.on(Hls.Events.MANIFEST_PARSED, (evt,data)=>{
+        const levels = data?.levels || currentHls.levels || [];
+        buildHlsLevels(levels, url);
+        video.play().catch(()=>{});
+      });
+      currentHls.on(Hls.Events.ERROR, (evt, data)=>{
+        if(data?.fatal){
+          if(data.type===Hls.ErrorTypes.NETWORK_ERROR){ showError('خطأ شبكة أثناء جلب m3u8.'); currentHls.startLoad(); }
+          else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){ showError('خطأ وسائط أثناء التشغيل.'); currentHls.recoverMediaError(); }
+          else { showError('خطأ قاتل في HLS.'); currentHls.destroy(); }
+        }
+      });
+    }else if(video.canPlayType('application/vnd.apple.mpegURL')){
+      video.src = url;
+      buildHlsLevels([], url);
+      video.addEventListener('loadedmetadata', ()=> video.play().catch(()=>{}), {once:true});
+    }else{
+      showError('هذا المتصفح لا يدعم HLS ولا hls.js.');
+    }
+    prepareDownloadUI(url);
+  }
+  function buildHlsLevels(levels, masterUrl){
+    hlsList.innerHTML=''; hlsBox.classList.remove('hidden');
+    // صف الماستر
+    hlsList.appendChild(makeRow('ملف m3u8 (الماستر)', masterUrl, [
+      makeBtn('فتح', masterUrl, true),
+      makeCopyBtn('نسخ الماستر', masterUrl)
+    ], masterUrl));
+    // مستويات
+    if(levels?.length){
+      levels.forEach((lvl, i)=>{
+        const h = lvl.height || (lvl.attrs && (lvl.attrs.RESOLUTION||'').split('x')[1]) || 'غير معروف';
+        const br = lvl.bitrate ? Math.round(lvl.bitrate/1000)+'kbps' : '—';
+        const row = document.createElement('div'); row.className='dl-item';
+        const left = document.createElement('div'); left.className='dl-left';
+        const b = document.createElement('span'); b.className='badge'; b.textContent = `جودة ${h}`;
+        const m = document.createElement('span'); m.className='meta'; m.textContent = `معدل: ${br}`;
+        left.appendChild(b); left.appendChild(m);
+        const btns = document.createElement('div'); btns.className='row-btns';
+        const choose = document.createElement('button'); choose.className='dl-btn'; choose.textContent='تشغيل هذه الجودة';
+        choose.onclick = ()=>{ if(currentHls){ currentHls.currentLevel=i; showInfo(`تم اختيار جودة ${h}`); video.play().catch(()=>{}); } };
+        btns.appendChild(choose);
+        row.appendChild(left); row.appendChild(btns);
+        hlsList.appendChild(row);
+      });
+    }else{
+      const note = document.createElement('div'); note.className='msg'; note.textContent='لا يمكن استعراض الجودات تلقائيًا مع دعم HLS الأصلي.';
+      hlsList.appendChild(note);
+    }
+  }
+
+  // =========== DASH ===========
+  function playDash(url){
+    video.style.display='block'; ytWrap.style.display='none'; embedFrame.style.display='none';
+    dashPlayer = dashjs.MediaPlayer().create();
+    dashPlayer.initialize(video, url, true);
+    dashPlayer.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, ()=>{
+      updateDashQualities();
+    });
+    dashPlayer.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED, ()=>{
+      showInfo('تم تبديل جودة DASH.');
+    });
+    prepareDownloadUI(url); // تنزيل سيعتمد على المصدر وإعداداته
+    dashBox.classList.remove('hidden');
+  }
+  function updateDashQualities(){
+    if(!dashPlayer) return;
+    const list = dashPlayer.getBitrateInfoListFor('video') || [];
+    dashQuality.innerHTML = '<option value="auto">تلقائي</option>';
+    list.forEach((q, idx)=>{
+      const h = q.height || '—';
+      const br = q.bitrate ? Math.round(q.bitrate/1000)+'kbps' : '';
+      const opt = document.createElement('option');
+      opt.value = String(idx);
+      opt.textContent = `${h} ${br}`;
+      dashQuality.appendChild(opt);
+    });
+  }
+  dashApply.onclick = ()=>{
+    if(!dashPlayer) return;
+    const val = dashQuality.value;
+    if(val==='auto'){
+      dashPlayer.updateSettings({ streaming:{ abr:{ autoSwitchBitrate:{ video:true } } } });
+      showInfo('تم تفعيل الاختيار التلقائي للجودة (DASH).');
+    }else{
+      dashPlayer.updateSettings({ streaming:{ abr:{ autoSwitchBitrate:{ video:false } } } });
+      dashPlayer.setQualityFor('video', Number(val));
+      showInfo(`تم تطبيق جودة DASH (${dashQuality.options[dashQuality.selectedIndex].textContent}).`);
+    }
+  };
+
+  // =========== التنزيل للروابط المباشرة ===========
+  function prepareDownloadUI(url){
+    dlList.innerHTML=''; dlBox.classList.remove('hidden');
+    dlList.appendChild(makeRow('الرابط الأصلي', url, [
+      makeOpenBtn(url),
+      makeDownloadBtn(url),
+      makeCopyBtn('نسخ', url)
+    ], url));
+
+    // تخمين الجودات بالاسم للملفات الثابتة فقط
+    if(isFile(url)){
+      ['1080p','720p','480p','360p'].forEach(q=>{
+        const guessed = url
+          .replace(/(\d{3,4}p)/i, q)
+          .replace(/_(\d{3,4})\./, `_${q.replace('p','')}.`)
+          .replace(/-(\d{3,4})\./, `-${q.replace('p','')}.`);
+        if(guessed!==url){
+          dlList.appendChild(makeRow(`جودة ${q} (تخميني)`, guessed, [
+            makeOpenBtn(guessed),
+            makeDownloadBtn(guessed),
+            makeCopyBtn('نسخ', guessed)
+          ], guessed));
+        }
+      });
+    }
+
+    // محاولة جلب حجم الملف (قد يفشل بسبب CORS)
+    fetchHeadSize(url).then(bytes=>{
+      if(bytes){ infoBytes.textContent = formatBytes(bytes); }
+    });
+  }
+  function makeOpenBtn(href){ return makeBtn('فتح', href, true); }
+  function makeDownloadBtn(href){ const a=document.createElement('a'); a.className='dl-btn'; a.href=href; a.download=''; a.textContent='تنزيل'; return a; }
+  function makeCopyBtn(label, href){ const b=document.createElement('button'); b.className='dl-btn'; b.textContent=label; b.onclick=async()=>{ try{ await navigator.clipboard.writeText(href); b.textContent='تم النسخ ✓'; setTimeout(()=>b.textContent=label, 1200);}catch{ alert('تعذّر النسخ'); } }; return b; }
+  function makeBtn(label, href, isLink){
+    if(isLink){ const a=document.createElement('a'); a.className='dl-btn'; a.href=href; a.target='_blank'; a.rel='noopener'; a.textContent=label; return a; }
+    const b=document.createElement('button'); b.className='dl-btn'; b.textContent=label; return b;
+  }
+  function makeRow(label, href, controls, rawHref){
+    const row=document.createElement('div'); row.className='dl-item';
+    const left=document.createElement('div'); left.className='dl-left';
+    const badge=document.createElement('span'); badge.className='badge'; badge.textContent=label;
+    const meta=document.createElement('span'); meta.className='meta';
+    try{ const u=new URL(href,location.href); meta.textContent = u.hostname + u.pathname; }catch{ meta.textContent = href; }
+    left.appendChild(badge); left.appendChild(meta);
+    const btns=document.createElement('div'); btns.className='row-btns';
+    controls.forEach(c=>btns.appendChild(c));
+    row.appendChild(left); row.appendChild(btns);
+    return row;
+  }
+
+  // =========== التشغيل حسب المصدر ===========
+  function playUrl(rawInput){
+    let url = cleanUrl(rawInput);
+    if(!validateUrl(url)){
+      try{ url = new URL(url, location.href).toString(); }catch{ showError('الرابط غير صالح.'); return; }
+    }
+    if(isHttpsPage && /^http:\/\//i.test(url)){ url = toHttps(url); showInfo('تم تحويل http إلى https لتجنّب الحظر.'); }
+
+    resetPanels();
+    setTopBar('direct', url); // مؤقتًا؛ سنعدّل حسب الكشف أدناه
+
+    // YouTube
+    if(isYouTube(url)){
+      const id = extractYtId(url);
+      if(!id){ showError('تعذّر استخراج معرف YouTube من الرابط.'); return; }
+      setTopBar('youtube', url);
+      ytWrap.style.display='block';
+      embedFrame.style.display='none'; video.style.display='none';
+      if(ytApiReady) createOrLoadYt(id); else pendingYtId=id;
+      infoBytes.textContent='—';
+      saveHistory({url});
+      return;
+    }
+
+    // Vimeo
+    if(isVimeo(url)){
+      setTopBar('vimeo', url);
+      const vid = (url.match(/vimeo\.com\/(?:video\/)?(\d{6,})/)||[])[1];
+      const embed = vid ? `https://player.vimeo.com/video/${vid}?autoplay=1&title=0&byline=0&portrait=0` : url;
+      embedFrame.src = embed; embedFrame.style.display='block'; ytWrap.style.display='none'; video.style.display='none';
+      infoBytes.textContent='—'; saveHistory({url}); return;
+    }
+
+    // TikTok
+    if(isTikTok(url)){
+      setTopBar('tiktok', url);
+      const tid = (url.match(/tiktok\.com\/(?:@[^/]+\/)?video\/(\d+)/)||[])[1];
+      embedFrame.src = tid ? `https://www.tiktok.com/embed/v2/video/${tid}` : url;
+      embedFrame.style.display='block'; ytWrap.style.display='none'; video.style.display='none';
+      infoBytes.textContent='—'; saveHistory({url}); return;
+    }
+
+    // Facebook
+    if(isFB(url)){
+      setTopBar('facebook', url);
+      embedFrame.src = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&autoplay=true`;
+      embedFrame.style.display='block'; ytWrap.style.display='none'; video.style.display='none';
+      infoBytes.textContent='—'; saveHistory({url}); return;
+    }
+
+    // HLS
+    if(isHls(url)){
+      setTopBar('hls', url);
+      playHls(url);
+      video.style.display='block';
+      saveHistory({url});
+      return;
+    }
+
+    // DASH
+    if(isDash(url)){
+      setTopBar('dash', url);
+      playDash(url);
+      video.style.display='block';
+      saveHistory({url});
+      return;
+    }
+
+    // ملفات مباشرة
+    if(isFile(url)){
+      setTopBar('direct', url);
+      video.style.display='block';
+      video.src = url;
+      video.addEventListener('loadedmetadata', ()=>{ video.play().catch(()=>{}); }, {once:true});
+      prepareDownloadUI(url);
+      saveHistory({url});
+      return;
+    }
+
+    showError('لم يتم التعرف على الرابط. أدخل mp4 / webm / m3u8 / mpd أو رابط YouTube/Vimeo/TikTok/Facebook.');
+  }
+
+  // أحداث
+  playBtn.onclick = ()=> playUrl(input.value);
+  input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') playBtn.click(); });
+
+  // مبدئيًا: إن أدخلت رابط يوتيوب بالإيمبد مع ? في النهاية سيعمل:
+  // مثالك: https://www.youtube.com/embed/QhIB8QZVLNE?
+
+})();
+</script>
+</body>
+</html>
