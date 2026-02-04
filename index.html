@@ -1,258 +1,160 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>مشغّل YouTube بدون API + MP4 + HLS</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تشغيل وتحميل فيديو يوتيوب</title>
 
-<style>
-body{background:#0b1020;color:#fff;font-family:Tahoma;padding:20px;margin:0}
-.box{max-width:900px;margin:auto;background:#121a33;padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,.15)}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-input{flex:1 1 500px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);
-      background:rgba(0,0,0,.25);color:#fff;direction:ltr}
-button{padding:11px 14px;border-radius:10px;border:0;background:#5b8cff;color:#07102a;font-weight:bold;cursor:pointer}
-.msg{font-size:13px;margin-top:8px;color:#a9b3d6}
-.player{margin-top:20px;border-radius:14px;overflow:hidden;background:#000;border:1px solid rgba(255,255,255,.15)}
-.ratio{position:relative;padding-top:56.25%}
-iframe,video{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
-video{display:none}
-</style>
-
-<!-- hls.js لتشغيل m3u8 -->
-<script/cdn.jsdelivr.net/npm/hls.js@latest
+  <style>
+    body{font-family:Tahoma,Arial,sans-serif;background:#0b1020;color:#fff;margin:0;padding:20px}
+    .box{max-width:900px;margin:auto;background:#121a33;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:16px}
+    input{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.25);color:#fff;outline:none}
+    button{margin-top:10px;padding:11px 14px;border-radius:10px;border:0;background:#5b8cff;color:#07102a;font-weight:700;cursor:pointer}
+    .msg{margin-top:10px;color:#a9b3d6;font-size:13px;line-height:1.8}
+    .err{color:#ff5b6a}
+    .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.15);background:#000}
+    .ratio{position:relative;padding-top:56.25%}
+    iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+    .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px}
+    .dl-item{margin:6px 0;padding:10px;background:#18203d;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+    a.dl-btn{color:#fff;background:#5b8cff;padding:6px 10px;border-radius:6px;text-decoration:none;font-weight:bold}
+  </style>
 </head>
 
 <body>
-<div class="box">
-  <h3>ضع رابط YouTube / MP4 / M3U8 ثم اضغط تشغيل</h3>
+  <div class="box">
+    <h3 style="margin:0 0 10px">ضع رابط يوتيوب ثم اضغط تشغيل</h3>
 
-  <div class="row">
-    <input id="url" placeholder="https://youtu.be/ID أو https://example.com/video.mp4 أو master.m3u8">
-    <button id="playBtn">تشغيل</button>
-  </div>
+    <input id="ytInput" placeholder="مثال: https://youtu.be/dQw4w9WgXcQ" />
+    <button id="playBtn" type="button">تشغيل</button>
 
-  <div id="msg" class="msg">ملاحظة: لا يتم استخدام YouTube API لتجنب الحظر. التشغيل يتم عبر iframe مباشر.</div>
+    <div id="status" class="msg">جاهز…</div>
 
-  <div class="player" id="playerBox" style="display:none">
-    <div class="ratio">
-      <iframe id="ytFrame"></iframe>
-      <video id="video" controls playsinline crossorigin="anonymous"></video>
+    <div class="player">
+      <div class="ratio">
+        <iframe id="ytFrame"
+          title="YouTube Player"
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowfullscreen></iframe>
+      </div>
     </div>
+
+    <div id="downloadBox" class="dl-box" style="display:none;">
+      <h4>خيارات التحميل المتاحة:</h4>
+      <div id="dlList"></div>
+    </div>
+
   </div>
-</div>
 
 <script>
-(function(){
-  const $ = id => document.getElementById(id);
-  const input = $('url');
-  const playBtn = $('playBtn');
-  const msg = $('msg');
-  const playerBox = $('playerBox');
-  const ytFrame = $('ytFrame');
-  const video = $('video');
+console.log("JS Loaded ✅");
 
-  function extractYT(url){
-    try{
-      const u=new URL(url);
-      if(u.hostname==="youtu.be") return u.pathname.substring(1);
-      if(u.searchParams.get("v")) return u.searchParams.get("v");
-      if(u.pathname.includes("/embed/")) return u.pathname.split("/embed/")[1];
-      if(u.pathname.includes("/shorts/")) return u.pathname.split("/shorts/")[1];
-    }catch{}
-    const m = url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{6,})/);
-    return m?m[1]:null;
-  }
+const input  = document.getElementById("ytInput");
+const btn    = document.getElementById("playBtn");
+const status = document.getElementById("status");
+const frame  = document.getElementById("ytFrame");
+const dlBox  = document.getElementById("downloadBox");
+const dlList = document.getElementById("dlList");
 
-  playBtn.onclick = ()=>{
-
-    let u = input.value.trim();
-    if(!u){ msg.innerHTML="❌ <span class='err'>أدخل رابطًا.</span>"; return; }
-
-    // تنظيف واجهة المشغل
-    video.style.display='none';
-    ytFrame.style.display='none';
-    video.pause();
-    video.removeAttribute("src");
-    ytFrame.removeAttribute("src");
-
-    playerBox.style.display="block";
-
-    // YouTube
-    if(u.includes("youtu")){
-      const id = extractYT(u);
-      if(!id){ msg.innerHTML="❌ <spanتمام يا محمد! ✅  
-بما أنك اخترت **الحل رقم 1** — وهو الحل الذهبي لمشكلتك —  
-فسأعطيك الآن **مشغّل YouTube كامل يعمل 100% بدون IFrame API**  
-وبالتالي:
-
-# 🎉 النتيجة:
-✔ يعمل داخل GitHub Pages  
-✔ لا يعتمد على API (والتي كانت محجوبة عندك)  
-✔ يشغّل أي فيديو YouTube فورًا  
-✔ يدعم روابط:  
-- `watch?v=`  
-- `youtu.be`  
-- `embed/`  
-- `shorts/`  
-✔ بدون الحاجة لأي سكربت خارجي  
-✔ بدون "جاري تحميل YouTube API"  
-✔ بدون مشاكل حجب  
-
-# ❌ ما الذي لن يقدمه هذا الحل؟
-- لا يمكن اختيار الجودة يدويًا  
-- لا يمكن التحكم في الفيديو عبر JS (play/pause/seek)  
-لأن هذه الميزات **تحتاج API ويُمنع تحميله لديك جغرافياً**.
-
-لكن التشغيل **يعمل 100%**.
-
----
-
-# 💯 الكود النهائي — جاهز للنسخ إلى `index.html`
-
-> هذا هو الحل الصحيح والنهائي لوضعك.
-
-```html
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube Player بدون API</title>
-
-<style>
-body{
-  background:#0b1020;
-  color:#fff;
-  font-family:Tahoma,Arial,sans-serif;
-  padding:20px;
+function setStatus(text, isError=false){
+  status.textContent = text;
+  status.className = isError ? "msg err" : "msg";
 }
-.box{
-  max-width:900px;
-  margin:auto;
-  background:#121a33;
-  padding:16px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.15);
-}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-input{
-  flex:1 1 550px;
-  padding:12px;
-  border-radius:10px;
-  border:1px solid rgba(255,255,255,.2);
-  background:rgba(0,0,0,.25);
-  color:#fff;
-  outline:none;
-  direction:ltr;
-}
-button{
-  padding:11px 14px;
-  border-radius:10px;
-  border:0;
-  background:#5b8cff;
-  color:#07102a;
-  font-weight:700;
-  cursor:pointer;
-}
-.msg{
-  margin-top:10px;
-  font-size:13px;
-  color:#a9b3d6;
-}
-.player{
-  margin-top:20px;
-  border-radius:14px;
-  overflow:hidden;
-  border:1px solid rgba(255,255,255,.15);
-}
-.ratio{
-  position:relative;
-  padding-top:56.25%;
-}
-iframe{
-  position:absolute;
-  inset:0;
-  width:100%;
-  height:100%;
-  border:0;
-  background:#000;
-}
-</style>
 
-</head>
-<body>
+function extractId(raw){
+  const text = (raw || "").trim();
+  if(!text) return null;
 
-<div class="box">
-  <h3>أدخل رابط فيديو YouTube ثم اضغط تشغيل</h3>
+  if(/^[a-zA-Z0-9_-]{11}$/.test(text)) return text;
 
-  <div class="row">
-    <input id="url" placeholder="مثال: https://www.youtube.com/watch?v=QhIB8QZVLNE أو youtu.be/ID">
-    <button onclick="play()">تشغيل</button>
-  </div>
+  let urlText = text;
+  if(text.startsWith("www.")) urlText = "https://" + text;
+  if(text.startsWith("youtu.be/")) urlText = "https://" + text;
+  if(text.startsWith("youtube.com/")) urlText = "https://" + text;
 
-  <div id="msg" class="msg">
-    • هذا المشغّل يعمل بدون YouTube API، لذلك يعمل 100% حتى لو كانت API محجوبة.
-  </div>
-
-  <div id="player" class="player" style="display:none">
-    <div class="ratio">
-      <iframe id="ytFrame" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-    </div>
-  </div>
-</div>
-
-<script>
-// استخراج ID من جميع أنواع روابط يوتيوب
-function extractYouTubeID(url){
   try{
-    // روابط youtu.be
-    if(url.includes("youtu.be/")){
-      return url.split("youtu.be/")[1].split(/[?&]/)[0];
+    const u = new URL(urlText);
+
+    if(u.hostname.includes("youtu.be")){
+      return u.pathname.split("/").filter(Boolean)[0] || null;
     }
-    // روابط embed
-    if(url.includes("/embed/")){
-      return url.split("/embed/")[1].split(/[?&]/)[0];
-    }
-    // روابط shorts
-    if(url.includes("/shorts/")){
-      return url.split("/shorts/")[1].split(/[?&]/)[0];
-    }
-    // روابط watch?v=
-    if(url.includes("watch?v=")){
-      return new URL(url).searchParams.get("v");
-    }
-  }catch(e){
+    const v = u.searchParams.get("v");
+    if(v) return v;
+
+    const m1 = u.pathname.match(/\/shorts\/([^/?#]+)/);
+    if(m1) return m1[1];
+
+    const m2 = u.pathname.match(/\/embed\/([^/?#]+)/);
+    if(m2) return m2[1];
+
+    return null;
+  } catch(e){
     return null;
   }
-  return null;
 }
 
-// تشغيل الفيديو داخل iframe بدون API
-function play(){
-  const u = document.getElementById("url").value.trim();
-  const msg = document.getElementById("msg");
+function buildEmbed(id){
+  return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&modestbranding=1&playsinline=1`;
+}
 
-  if(!u){
-    msg.innerHTML = "❌ الرجاء إدخال رابط YouTube";
-    return;
-  }
+// Fetch download links from Piped API
+async function fetchDownloadLinks(id){
+  const api = `https://piped.video/api/v1/videos/${id}`;
 
-  const id = extractYouTubeID(u);
+  const res = await fetch(api);
+  const data = await res.json();
 
+  return data.formatStreams || [];
+}
+
+btn.addEventListener("click", async () => {
+
+  const id = extractId(input.value);
   if(!id){
-    msg.innerHTML = "❌ لم أستطع استخراج معرف الفيديو. تأكد من الرابط.";
+    setStatus("الرابط غير صحيح أو لا يحتوي على معرف فيديو.", true);
+    frame.src = "";
+    dlBox.style.display = "none";
     return;
   }
 
-  // إنشاء رابط embed
-  const embed = "https://www.youtube.com/embed/" + id + "?autoplay=1&rel=0&modestbranding=1";
+  frame.src = buildEmbed(id);
+  setStatus("تم تحميل الفيديو داخل الصفحة ✅");
 
-  document.getElementById("ytFrame").src = embed;
-  document.getElementById("player").style.display = "block";
+  // تحميل الجودات
+  setStatus("جاري جلب روابط التحميل…");
 
-  msg.innerHTML = "✔ تم تشغيل الفيديو";
-}
+  try{
+    const qualities = await fetchDownloadLinks(id);
+
+    dlList.innerHTML = "";
+    dlBox.style.display = "block";
+
+    qualities.forEach(q => {
+      const item = document.createElement("div");
+      item.className = "dl-item";
+
+      item.innerHTML = `
+        <span>${q.quality} — ${q.format}</span>
+        ${q.url}تحميل</a>
+      `;
+      dlList.appendChild(item);
+    });
+
+    setStatus("تم استخراج روابط التحميل بنجاح 🎉");
+
+  } catch(err){
+    console.error(err);
+    setStatus("تعذر جلب روابط التحميل.", true);
+  }
+
+});
+
+// تشغيل via Enter
+input.addEventListener("keydown", (e) => {
+  if(e.key === "Enter") btn.click();
+});
 </script>
 
 </body>
