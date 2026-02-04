@@ -21,7 +21,8 @@
     h3{margin:0 0 12px}
     .row{display:flex;gap:10px;flex-wrap:wrap}
     input{
-      flex:1 1 480px;padding:12px;border-radius:10px;border:1px solid var(--border2);
+      flex:1 1 480px;
+      padding:12px;border-radius:10px;border:1px solid var(--border2);
       background:rgba(0,0,0,.25);color:#fff;outline:none
     }
     button{
@@ -35,21 +36,20 @@
     video{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
     .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px;display:none;border:1px solid var(--border)}
     .dl-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+    .section-title{margin:8px 0 6px;font-size:14px;color:#cfd6ff}
     .dl-list{display:flex;flex-direction:column;gap:8px}
     .dl-item{padding:10px;background:#18203d;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
     .dl-left{display:flex;align-items:center;gap:10px}
     .badge{padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border2);color:#dbe2ff;background:#1c2a5f}
     .meta{font-size:13px;color:#cfd6ff}
+    .row-btns{display:flex;gap:8px;flex-wrap:wrap}
     a.dl-btn,button.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold;border:0;cursor:pointer}
     .hint{font-size:12px;color:#9aa7d3;margin-top:8px}
     .hidden{display:none!important}
-    .row-btns{display:flex;gap:8px;flex-wrap:wrap}
-    .pill{padding:2px 8px;border-radius:999px;border:1px solid var(--border2);background:#1c2a5f;color:#dbe2ff;font-size:12px}
-    .section-title{margin:8px 0 6px;font-size:14px;color:#cfd6ff}
   </style>
 
-  <!-- hls.js لدعم تشغيل M3U8 -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@t>
+  <!-- hls.js لدعم تشغيل HLS (m3u8) على المتصفحات التي لا تدعمه أصلاً -->
+  https://cdn.jsdelivr.net/npm/hls.js@latest</script>
 </head>
 
 <body>
@@ -57,7 +57,7 @@
     <h3>ضع رابط فيديو مباشر ثم اضغط تشغيل</h3>
 
     <div class="row">
-      <input id="url" type="text" placeholder="مثال: https://example.com/video.mp4 أو https://example.com/live/index.m3u8">
+      <input id="url" type="text" placeholder="مثال: https://example.com/video.mp4 أو https://example.com/live/master.m3u8">
       <button id="playBtn" type="button">تشغيل</button>
     </div>
 
@@ -87,7 +87,7 @@
         <div class="dl-list" id="hlsList"></div>
         <div class="hint">
           ملاحظة: زر "قائمة m3u8 للجودة" مفيد للاستخدام مع VLC أو ffmpeg أو مدير تنزيلات.
-          المتصفح لا يدمج المقاطع تلقائيًا. لتحميل ملف نهائي، استخدم:
+          لتحميل ملف نهائي من m3u8:
           <code>ffmpeg -i "URL.m3u8" -c copy output.mp4</code>
         </div>
       </div>
@@ -109,6 +109,7 @@
   let currentHls = null;
   let lastSourceUrl = null;
 
+  // أدوات مساعدة
   const isHttpsPage = location.protocol === 'https:';
   const isHls = (u) => /\.m3u8(\?|#|$)/i.test(u);
   const isDirect = (u) => /\.(mp4|webm|m4v)(\?|#|$)/i.test(u) || isHls(u);
@@ -134,13 +135,13 @@
     resetUI();
     dlBox.classList.remove('hidden');
 
-    // 1) زر تحميل بالرابط الأصلي (للـ MP4/WebM أو حتى m3u8 لفتح/تنزيل الملف نفسه)
+    // 1) الرابط الأصلي (MP4/WebM أو حتى m3u8 لفتح/تنزيل الملف النصّي)
     addDownloadRow('الرابط الأصلي', url, true);
 
-    // 2) جودات تخمينية بالاسم (تنفع فقط إن كان اسم الملف يحتوي رقم الجودة)
+    // 2) جودات تخمينية بالاسم (إن كان اسم الملف يحتوي رقم الجودة)
     const qualities = ['1080p','720p','480p','360p'];
     qualities.forEach(q=>{
-      let guessed = url
+      const guessed = url
         .replace(/(\d{3,4}p)/i, q)
         .replace(/_(\d{3,4})\./, `_${q.replace('p','')}.`)
         .replace(/-(\d{3,4})\./, `-${q.replace('p','')}.`);
@@ -148,236 +149,4 @@
     });
   }
 
-  function addDownloadRow(label, href, primary){
-    const row = document.createElement('div');
-    row.className = 'dl-item';
-
-    const left = document.createElement('div');
-    left.className = 'dl-left';
-
-    const badge = document.createElement('span');
-    badge.className = 'badge';
-    badge.textContent = label;
-
-    const meta = document.createElement('span');
-    meta.className = 'meta';
-    meta.textContent = primary ? 'قد لا يعمل إذا منع السيرفر التحميل الخارجي (CORS).' : 'محاولة تخمين جودة بالاسم.';
-
-    left.appendChild(badge);
-    left.appendChild(meta);
-
-    const right = document.createElement('div');
-    const a = document.createElement('a');
-    a.className = 'dl-btn';
-    a.href = href;
-    a.download = '';
-    a.textContent = primary ? 'فتح/تحميل' : 'فتح';
-    a.rel = 'noopener';
-    a.target = '_blank';
-    right.appendChild(a);
-
-    row.appendChild(left);
-    row.appendChild(right);
-    dlList.appendChild(row);
-  }
-
-  function humanBitrate(bps){
-    if(!bps || isNaN(bps)) return '';
-    const kbps = Math.round(bps/1000);
-    return kbps.toLocaleString('ar-EG') + ' كبت/ث';
-  }
-
-  function copyToClipboard(text){
-    if (navigator.clipboard && window.isSecureContext){
-      return navigator.clipboard.writeText(text);
-    }else{
-      // fallback
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.focus(); ta.select();
-      try{ document.execCommand('copy'); }catch(e){}
-      document.body.removeChild(ta);
-      return Promise.resolve();
-    }
-  }
-
-  function buildHlsQualityUI(levels, sourceUrl){
-    hlsList.innerHTML = '';
-    if(!levels || !levels.length){
-      hlsSection.classList.add('hidden');
-      return;
-    }
-    hlsSection.classList.remove('hidden');
-
-    levels.forEach((lvl, i)=>{
-      const row = document.createElement('div');
-      row.className = 'dl-item';
-
-      const left = document.createElement('div');
-      left.className = 'dl-left';
-
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-
-      // تحديد التسمية: الارتفاع + معدل البت + الاسم إن وجد
-      const height = lvl.height || (lvl.attrs && lvl.attrs.RESOLUTION ? parseInt(String(lvl.attrs.RESOLUTION).split('x')[1]) : null);
-      const hTxt = height ? `${height}p` : (lvl.name || 'غير مسمّى');
-      const brTxt = humanBitrate(lvl.bitrate);
-      badge.textContent = `جودة ${hTxt}`;
-
-      const meta = document.createElement('span');
-      meta.className = 'meta';
-      meta.textContent = brTxt ? `معدل البت: ${brTxt}` : 'قائمة جودة HLS';
-
-      left.appendChild(badge);
-      left.appendChild(meta);
-
-      const right = document.createElement('div');
-      right.className = 'row-btns';
-
-      // تشغيل هذه الجودة
-      const playBtn = document.createElement('button');
-      playBtn.className = 'dl-btn';
-      playBtn.textContent = 'تشغيل هذه الجودة';
-      playBtn.addEventListener('click', ()=>{
-        if(currentHls){
-          // ضبط المستوى الحالي (قد يختلف API حسب الإصدار، هذا الشائع)
-          currentHls.currentLevel = i;
-          showInfo(`تم اختيار جودة: ${hTxt}${brTxt ? ' — ' + brTxt : ''}`);
-        }
-      });
-      right.appendChild(playBtn);
-
-      // رابط m3u8 الخاص بهذه الجودة (قد يكون مصفوفة أو نص)
-      let lvlUrl = Array.isArray(lvl.url) ? (lvl.url[0] || '') : (lvl.url || '');
-      try { lvlUrl = new URL(lvlUrl, sourceUrl).toString(); } catch(e){ /* اتركه كما هو */ }
-
-      const openBtn = document.createElement('a');
-      openBtn.className = 'dl-btn';
-      openBtn.textContent = 'قائمة m3u8 للجودة';
-      openBtn.href = lvlUrl || sourceUrl;
-      openBtn.target = '_blank';
-      openBtn.rel = 'noopener';
-      right.appendChild(openBtn);
-
-      const copyBtn = document.createElement('button');
-      copyBtn.className = 'dl-btn';
-      copyBtn.textContent = 'نسخ الرابط';
-      copyBtn.addEventListener('click', async ()=>{
-        await copyToClipboard(lvlUrl || sourceUrl);
-        showInfo('تم نسخ رابط الجودة إلى الحافظة.');
-      });
-      right.appendChild(copyBtn);
-
-      row.appendChild(left);
-      row.appendChild(right);
-      hlsList.appendChild(row);
-    });
-  }
-
-  function cleanupPlayer(){
-    if (currentHls){
-      try { currentHls.destroy(); } catch(e){}
-      currentHls = null;
-    }
-    try { video.pause(); } catch(e){}
-    video.removeAttribute('src');
-    while (video.firstChild) video.removeChild(video.firstChild);
-    video.load();
-    resetUI();
-  }
-
-  function canPlayNativeHls(){
-    return video.canPlayType('application/vnd.apple.mpegurl');
-  }
-
-  async function play(){
-    let url = input.value.trim();
-
-    if(!url){ showError('الرجاء إدخال رابط فيديو مباشر'); return; }
-    if(!validateUrl(url)){ showError('الرابط غير صالح. تأكد أنه يبدأ بـ http أو https'); return; }
-
-    if(isHttpsPage && url.startsWith('http://')){
-      const httpsCandidate = toHttps(url);
-      showInfo('تم تحويل الرابط إلى HTTPS لمحاولة تجنّب الحظر (Mixed Content).');
-      url = httpsCandidate;
-    }
-
-    if(!isDirect(url)){
-      showError('هذا ليس رابط ملف فيديو مباشر (mp4/webm/m3u8). الروابط من المنصات (YouTube/Vimeo/Drive) غالبًا غير مباشرة أو محمية.');
-      playerBox.classList.add('hidden');
-      dlBox.classList.add('hidden');
-      return;
-    }
-
-    // إظهار المشغل وتجهيز الواجهات
-    playerBox.classList.remove('hidden');
-    dlBox.classList.remove('hidden');
-    cleanupPlayer();
-
-    // إعداد التحميل/الروابط
-    prepareDownloadUI(url);
-    lastSourceUrl = url;
-
-    if(isHls(url)){
-      if (window.Hls && Hls.isSupported()){
-        const hls = new Hls();
-        currentHls = hls;
-
-        hls.on(Hls.Events.MANIFEST_PARSED, function(event, data){
-          // data.levels موجودة عادة؛ وإن لم تتوفر نقرأ من hls.levels
-          const levels = (data && data.levels && data.levels.length) ? data.levels : hls.levels || [];
-          buildHlsQualityUI(levels, url);
-        });
-
-        hls.on(Hls.Events.ERROR, function(event, data){
-          console.warn('HLS error', data);
-          if(data && data.details){
-            showError('فشل تشغيل HLS: ' + data.details + ' — قد يكون السبب CORS من السيرفر.');
-          }else{
-            showError('فشل تشغيل HLS — تحقق من السماح عبر CORS.');
-          }
-        });
-
-        try{
-          hls.loadSource(url);
-          hls.attachMedia(video);
-        }catch(e){
-          showError('تعذّر تحميل مصدر HLS. تحقق من الرابط وقيود CORS.');
-        }
-      } else if (canPlayNativeHls()){
-        video.src = url;
-        video.load();
-        // لا نستطيع استخراج الجودات بدون hls.js، نخفي قسم الجودات
-        hlsSection.classList.add('hidden');
-      } else {
-        showError('متصفحك لا يدعم HLS، ولم تتوفر hls.js بشكل صحيح.');
-        return;
-      }
-    } else {
-      // mp4 / webm / m4v
-      video.src = url;
-      video.load();
-      hlsSection.classList.add('hidden');
-    }
-
-    showInfo(
-`تم تجهيز المشغل.
-إن لم يعمل التشغيل:
-• افتح الرابط في تبويب جديد للتأكد من صلاحيته.
-• استخدم HTTPS إذا كانت صفحتك HTTPS.
-• إن كان النطاق الخارجي يمنع CORS، قد يفشل التشغيل/التحميل.
-• MKV غالبًا غير مدعوم، استخدم MP4/WebM أو HLS.`
-    );
-  }
-
-  playBtn.addEventListener('click', play);
-  input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') play(); });
-})();
-</script>
-
-</body>
-</html>
+  function addDownloadRow(label, href, isPrimary){
