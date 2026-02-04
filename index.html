@@ -120,3 +120,331 @@
     msg.innerHTML = '❌ <span class="err">' + text + '</span>';
   }
   function showInfo(text){
+    msg.innerHTML = 'ℹ️ ' + text;
+  }
+  function validateUrl(u){
+    try{ new URL(u); return true; }catch(e){ return false; }
+  }
+
+  function resetUI(){
+    dlList.innerHTML = '';
+    hlsList.innerHTML = '';
+    hlsSection.classList.add('hidden');
+  }
+
+  function ensureHttpsIfNeeded(url){
+    if(isHttpsPage && /^http:\/\//i.test(url)){
+      return toHttps(url);
+    }
+    return url;
+  }
+
+  function prepareDownloadUI(url){
+    resetUI();
+    dlBox.classList.remove('hidden');
+
+    // 1) الرابط الأصلي (MP4/WebM أو حتى m3u8 لفتح/تنزيل الملف النصّي)
+    addDownloadRow('الرابط الأصلي', url, true);
+
+    // 2) تخمين جودات شائعة بناءً على اسم الملف
+    if(!isHls(url)) {
+      const qualities = ['1080p','720p','480p','360p'];
+      qualities.forEach(q=>{
+        const guessed = url
+          .replace(/(\d{3,4}p)/i, q)
+          .replace(/_(\d{3,4})\./, `_${q.replace('p','')}.`)
+          .replace(/-(\d{3,4})\./, `-${q.replace('p','')}.`);
+        if(guessed !== url) {
+          addDownloadRow(`جودة ${q} (تخميني)`, guessed, false);
+        }
+      });
+    }
+  }
+
+  function addDownloadRow(label, href, isPrimary){
+    const row = document.createElement('div');
+    row.className = 'dl-item';
+
+    const left = document.createElement('div');
+    left.className = 'dl-left';
+
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = label;
+
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    try {
+      const u = new URL(href, location.href);
+      meta.textContent = u.hostname + u.pathname;
+    } catch {
+      meta.textContent = href;
+    }
+
+    left.appendChild(badge);
+    left.appendChild(meta);
+
+    const btns = document.createElement('div');
+    btns.className = 'row-btns';
+
+    // زر فتح في تبويب جديد
+    const openA = document.createElement('a');
+    openA.className = 'dl-btn';
+    openA.href = href;
+    openA.target = '_blank';
+    openA.rel = 'noopener';
+    openA.textContent = 'فتح';
+    btns.appendChild(openA);
+
+    // زر تنزيل مباشر (قد يفشل بسبب CORS)
+    const dlA = document.createElement('a');
+    dlA.className = 'dl-btn';
+    dlA.href = href;
+    dlA.download = '';
+    dlA.textContent = 'تنزيل';
+    btns.appendChild(dlA);
+
+    // زر نسخ الرابط
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'dl-btn';
+    copyBtn.textContent = 'نسخ الرابط';
+    copyBtn.addEventListener('click', async ()=>{
+      try {
+        await navigator.clipboard.writeText(href);
+        copyBtn.textContent = 'تم النسخ ✓';
+        setTimeout(()=> copyBtn.textContent = 'نسخ الرابط', 1200);
+      } catch {
+        alert('تعذّر النسخ. المتصفح منع الوصول للحافظة.');
+      }
+    });
+    btns.appendChild(copyBtn);
+
+    row.appendChild(left);
+    row.appendChild(btns);
+
+    if(isPrimary) {
+      row.style.border = '1px solid var(--border2)';
+      row.style.background = '#1b2546';
+    }
+
+    dlList.appendChild(row);
+  }
+
+  function clearPlayer(){
+    if(currentHls){
+      try {
+        currentHls.destroy();
+      } catch(e){}
+      currentHls = null;
+    }
+    video.pause();
+    video.removeAttribute('src');
+    // مسح مصادر الفيديو إن وجدت
+    while(video.firstChild) video.removeChild(video.firstChild);
+    video.load();
+  }
+
+  function playUrl(url){
+    clearPlayer();
+    playerBox.classList.remove('hidden');
+    lastSourceUrl = url;
+
+    // إن كان HLS
+    if(isHls(url)){
+      if(window.Hls && window.Hls.isSupported()){
+        currentHls = new Hls({
+          // يمكن تعديل الإعدادات هنا إذا رغبت
+          // مثل: maxBufferLength: 30
+        });
+        currentHls.attachMedia(video);
+        currentHls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          currentHls.loadSource(url);
+        });
+
+        // عند تحليل القائمة، سنعرض الجودات المتوفرة
+        currentHls.on(Hls.Events.MANIFEST_PARSED, (evt, data) => {
+          const levels = data && data.levels ? data.levels : (currentHls.levels || []);
+          buildHlsQualityList(levels, url);
+          showInfo(`تم تحميل قائمة HLS. وجدنا ${levels.length} جودة متاحة (إن دعمت المنصة تبديل الجودة).`);
+          video.play().catch(()=>{});
+        });
+
+        currentHls.on(Hls.Events.ERROR, (evt, data) => {
+          console.warn('HLS error', data);
+          if(data && data.fatal){
+            switch(data.type){
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                showError('خطأ شبكة أثناء جلب m3u8. تحقق من الرابط أو من CORS.');
+                currentHls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                showError('خطأ وسائط أثناء التشغيل. سنحاول الإصلاح.');
+                currentHls.recoverMediaError();
+                break;
+              default:
+                showError('خطأ قاتل في HLS. سيتم إيقاف التشغيل.');
+                currentHls.destroy();
+                break;
+            }
+          }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegURL')) {
+        // دعم HLS أصلي (Safari غالباً)
+        video.src = url;
+        buildHlsQualityList([], url); // لا يمكن استخراج الجودات هنا، نعرض فقط زر نسخ الماستر
+        video.addEventListener('loadedmetadata', () => {
+          video.play().catch(()=>{});
+        });
+        showInfo('يتم تشغيل HLS بالدعم الأصلي للمتصفح.');
+      } else {
+        showError('هذا المتصفح لا يدعم HLS، ولم نستطع تحميل hls.js.');
+      }
+      return;
+    }
+
+    // ملفات مباشرة mp4/webm
+    video.src = url;
+    video.addEventListener('loadedmetadata', () => {
+      video.play().catch(()=>{});
+    }, { once: true });
+    showInfo('تم تعيين فيديو مباشر للتشغيل.');
+  }
+
+  function buildHlsQualityList(levels, masterUrl){
+    hlsList.innerHTML = '';
+    hlsSection.classList.remove('hidden');
+
+    // زر لنسخ رابط الماستر m3u8 دائماً
+    const masterRow = document.createElement('div');
+    masterRow.className = 'dl-item';
+
+    const left = document.createElement('div');
+    left.className = 'dl-left';
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = 'ملف m3u8 (الماستر)';
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = masterUrl;
+    left.appendChild(badge);
+    left.appendChild(meta);
+
+    const btns = document.createElement('div');
+    btns.className = 'row-btns';
+    const copyMaster = document.createElement('button');
+    copyMaster.className = 'dl-btn';
+    copyMaster.textContent = 'نسخ رابط m3u8 (الماستر)';
+    copyMaster.addEventListener('click', async ()=>{
+      try{
+        await navigator.clipboard.writeText(masterUrl);
+        copyMaster.textContent = 'تم النسخ ✓';
+        setTimeout(()=> copyMaster.textContent = 'نسخ رابط m3u8 (الماستر)', 1200);
+      }catch{ alert('تعذّر النسخ'); }
+    });
+    btns.appendChild(copyMaster);
+
+    const openMaster = document.createElement('a');
+    openMaster.className = 'dl-btn';
+    openMaster.href = masterUrl;
+    openMaster.target = '_blank';
+    openMaster.rel = 'noopener';
+    openMaster.textContent = 'فتح الماستر';
+    btns.appendChild(openMaster);
+
+    masterRow.appendChild(left);
+    masterRow.appendChild(btns);
+    hlsList.appendChild(masterRow);
+
+    // إن وُجدت مستويات جودة من hls.js نعرضها للتشغيل (تبديل الجودة)
+    if(levels && levels.length){
+      levels.forEach((lvl, idx)=>{
+        const row = document.createElement('div');
+        row.className = 'dl-item';
+
+        const left = document.createElement('div');
+        left.className = 'dl-left';
+
+        const b = document.createElement('span');
+        b.className = 'badge';
+        const height = lvl.height || (lvl.attrs && (lvl.attrs.RESOLUTION || '').split('x')[1]) || '';
+        const bitrate = lvl.bitrate ? Math.round(lvl.bitrate/1000)+'kbps' : '';
+        b.textContent = `جودة ${height || 'غير معروفة'}`;
+        const m = document.createElement('span');
+        m.className = 'meta';
+        m.textContent = `معدل: ${bitrate || 'غير معروف'}`;
+
+        left.appendChild(b);
+        left.appendChild(m);
+
+        const btns = document.createElement('div');
+        btns.className = 'row-btns';
+
+        const setQ = document.createElement('button');
+        setQ.className = 'dl-btn';
+        setQ.textContent = 'تشغيل هذه الجودة';
+        setQ.addEventListener('click', ()=>{
+          if(currentHls){
+            currentHls.currentLevel = idx; // تبديل الجودة
+            showInfo(`تم اختيار الجودة رقم ${idx} (${height || 'UNK'}).`);
+            video.play().catch(()=>{});
+          } else {
+            showInfo('لا يمكن تبديل الجودة في الدعم الأصلي للمتصفح.');
+          }
+        });
+        btns.appendChild(setQ);
+
+        row.appendChild(left);
+        row.appendChild(btns);
+        hlsList.appendChild(row);
+      });
+    } else {
+      const note = document.createElement('div');
+      note.className = 'hint';
+      note.textContent = 'لا يمكن استعراض الجودات تلقائياً مع دعم HLS الأصلي؛ استخدم رابط الماستر مع VLC/ffmpeg.';
+      hlsList.appendChild(note);
+    }
+  }
+
+  // معالجات الواجهة
+  playBtn.addEventListener('click', ()=>{
+    let url = input.value.trim();
+    if(!url){
+      showError('من فضلك أدخل رابط فيديو مباشر.');
+      return;
+    }
+    if(!validateUrl(url)){
+      // السماح بمسارات نسبية مع base الصفحة
+      try{
+        url = new URL(url, location.href).toString();
+      }catch{
+        showError('الرابط غير صالح.');
+        return;
+      }
+    }
+
+    // معالجة Mixed Content إذا الصفحة https
+    const finalUrl = ensureHttpsIfNeeded(url);
+    if(isHttpsPage && /^http:\/\//i.test(url)){
+      showInfo('تم تحويل http إلى https لتجنّب الحظر في الصفحات الآمنة.');
+    }
+
+    if(!isDirect(finalUrl)){
+      showError('الرجاء إدخال رابط ينتهي بـ mp4 / webm / m3u8.');
+      return;
+    }
+
+    prepareDownloadUI(finalUrl);
+    playUrl(finalUrl);
+  });
+
+  // السماح بالضغط Enter داخل الحقل للتشغيل
+  input.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      playBtn.click();
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
