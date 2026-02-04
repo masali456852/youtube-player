@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تشغيل وتحميل أي فيديو (روابط مباشرة)</title>
+  <title>تشغيل وتحميل أي فيديو (روابط مباشرة + YouTube تشغيل فقط)</title>
 
   <style>
     :root{
@@ -34,6 +34,7 @@
     .player{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:#000}
     .ratio{position:relative;padding-top:56.25%}
     video{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+    #ytPlayerWrap{position:absolute;inset:0;width:100%;height:100%}
     .dl-box{margin-top:20px;background:#0f152b;padding:14px;border-radius:10px;display:none;border:1px solid var(--border)}
     .dl-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
     .section-title{margin:8px 0 6px;font-size:14px;color:#cfd6ff}
@@ -43,32 +44,61 @@
     .badge{padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border2);color:#dbe2ff;background:#1c2a5f}
     .meta{font-size:13px;color:#cfd6ff}
     .row-btns{display:flex;gap:8px;flex-wrap:wrap}
-    a.dl-btn,button.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold;border:0;cursor:pointer}
+    a.dl-btn,button.dl-btn,select.dl-btn{color:#fff;background:var(--accent);padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:bold;border:0;cursor:pointer}
+    select.dl-btn{appearance:none;-webkit-appearance:none;-moz-appearance:none}
     .hint{font-size:12px;color:#9aa7d3;margin-top:8px}
     .hidden{display:none!important}
     code{background:#0c1432;border:1px solid var(--border2);padding:2px 6px;border-radius:6px}
+    .note{padding:10px;border-radius:8px;background:#14214b;border:1px solid var(--border2);color:#cfd6ff;margin-top:8px}
+    .warn{color:var(--danger)}
   </style>
 
-  <!-- hls.js لدعم تشغيل HLS (m3u8) على المتصفحات التي لا تدعمه أصلاً -->
+  <!-- hls.js لدعم تشغيل HLS (m3u8) -->
   https://cdn.jsdelivr.net/npm/hls.js@latest</script>
+  <!-- YouTube IFrame API للتشغيل داخل iframe (بدون تنزيل) -->
+  https://www.youtube.com/iframe_api</script>
 </head>
 
 <body>
   <div class="box">
-    <h3>ضع رابط فيديو مباشر ثم اضغط تشغيل</h3>
+    <h3>ضع رابط فيديو مباشر أو رابط YouTube ثم اضغط تشغيل</h3>
 
     <div class="row">
-      <input id="url" type="text" placeholder="مثال: https://example.com/video.mp4 أو https://example.com/live/master.m3u8">
+      <input id="url" type="text" placeholder="مثال: https://example.com/video.mp4 أو https://example.com/live/master.m3u8 أو https://youtu.be/ID">
       <button id="playBtn" type="button">تشغيل</button>
     </div>
 
     <div id="msg" class="msg hint">
-      ملاحظة: يجب أن يكون الرابط مباشر لملف فيديو (mp4 / webm / m3u8) ويفضّل https لتجنّب حظر Mixed Content.
+      ملاحظة: الروابط المباشرة (mp4 / webm / m3u8) تدعم التشغيل والتحميل. روابط YouTube تُشغَّل فقط داخل iframe احترامًا لشروط الخدمة.
     </div>
 
     <div class="player hidden" id="playerBox">
       <div class="ratio">
+        <div id="ytPlayerWrap" class="hidden"><div id="ytPlayer"></div></div>
         <video id="video" controls crossorigin="anonymous" playsinline></video>
+      </div>
+    </div>
+
+    <div id="ytControls" class="dl-box hidden">
+      <div class="dl-header">
+        <h3 style="margin:0">خيارات تشغيل YouTube</h3>
+        <small class="hint">يمكنك اختيار جودة التشغيل إن كانت متاحة.</small>
+      </div>
+      <div class="dl-item">
+        <div class="dl-left">
+          <span class="badge">الجودة</span>
+          <span class="meta">اختر الجودة المتاحة من YouTube</span>
+        </div>
+        <div class="row-btns">
+          <select id="ytQuality" class="dl-btn">
+            <option value="auto">تلقائي</option>
+          </select>
+          <button id="ytCopyBtn" class="dl-btn">نسخ رابط YouTube</button>
+          #فتح على YouTube</a>
+        </div>
+      </div>
+      <div class="note">
+        ⚠️ <b class="warn">تنبيه:</b> التحميل من YouTube غير متاح عبر هذه الصفحة احترامًا لشروط الخدمة. استخدم هذه الميزة لتشغيل الفيديو فقط.
       </div>
     </div>
 
@@ -78,17 +108,14 @@
         <small class="hint">إن فشل التحميل، فالسيرفر يمنع CORS أو التحميل المباشر.</small>
       </div>
 
-      <!-- الروابط المباشرة والافتراضية (MP4/WebM/M3U8 نصي) -->
       <div class="section-title">روابط مباشرة</div>
       <div class="dl-list" id="dlList"></div>
 
-      <!-- الجودات المستخرجة من HLS -->
       <div id="hlsSection" class="hidden">
         <div class="section-title">الجودات المتاحة (HLS)</div>
         <div class="dl-list" id="hlsList"></div>
         <div class="hint">
-          ملاحظة: زر "نسخ رابط m3u8 (الماستر)" مفيد للاستخدام مع VLC أو ffmpeg.
-          لتحميل ملف نهائي من m3u8:
+          لتحميل ملف نهائي من m3u8 (إن سمح المصدر): 
           <code>ffmpeg -i "URL.m3u8" -c copy output.mp4</code>
         </div>
       </div>
@@ -102,6 +129,13 @@
   const msg = document.getElementById('msg');
   const playerBox = document.getElementById('playerBox');
   const video = document.getElementById('video');
+
+  const ytWrap = document.getElementById('ytPlayerWrap');
+  const ytControls = document.getElementById('ytControls');
+  const ytQualitySel = document.getElementById('ytQuality');
+  const ytCopyBtn = document.getElementById('ytCopyBtn');
+  const ytOpenBtn = document.getElementById('ytOpenBtn');
+
   const dlBox = document.getElementById('dlBox');
   const dlList = document.getElementById('dlList');
   const hlsSection = document.getElementById('hlsSection');
@@ -110,11 +144,53 @@
   let currentHls = null;
   let lastSourceUrl = null;
 
+  // YouTube player state
+  let ytApiReady = false;
+  let ytPlayer = null;
+  let pendingYtId = null;
+  let lastYtUrl = null;
+
+  // يوتيوب API جاهزية
+  window.onYouTubeIframeAPIReady = function(){
+    ytApiReady = true;
+    if(pendingYtId){
+      createOrLoadYt(pendingYtId);
+      pendingYtId = null;
+    }
+  };
+
   // أدوات مساعدة
   const isHttpsPage = location.protocol === 'https:';
   const isHls = (u) => /\.m3u8(\?|#|$)/i.test(u);
   const isDirect = (u) => /\.(mp4|webm|m4v)(\?|#|$)/i.test(u) || isHls(u);
   const toHttps = (u) => u.replace(/^http:\/\//i, 'https://');
+  const isYouTube = (u) => {
+    try{
+      const url = new URL(u, location.href);
+      return /(^|\.)youtube\.com$/i.test(url.hostname) || /(^|\.)youtu\.be$/i.test(url.hostname);
+    }catch{ return /youtu\.be|youtube\.com/i.test(u); }
+  };
+  const extractYouTubeId = (u) => {
+    try{
+      const url = new URL(u, location.href);
+      if(/youtu\.be$/i.test(url.hostname)){
+        return url.pathname.replace('/','').split('?')[0];
+      }
+      if(url.pathname.startsWith('/embed/')){
+        return url.pathname.split('/embed/')[1].split(/[?&]/)[0];
+      }
+      if(url.pathname.startsWith('/shorts/')){
+        return url.pathname.split('/shorts/')[1].split(/[?&]/)[0];
+      }
+      const v = url.searchParams.get('v');
+      if(v) return v;
+      return null;
+    }catch{
+      // fallback بسيط
+      const m = u.match(/(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([A-Za-z0-9_\-]{6,})/);
+      return m ? m[1] : null;
+    }
+  };
 
   function showError(text){
     msg.innerHTML = '❌ <span class="err">' + text + '</span>';
@@ -141,12 +217,13 @@
 
   function prepareDownloadUI(url){
     resetUI();
+    ytControls.classList.add('hidden');
     dlBox.classList.remove('hidden');
 
-    // 1) الرابط الأصلي (MP4/WebM أو حتى m3u8 لفتح/تنزيل الملف النصّي)
+    // 1) الرابط الأصلي
     addDownloadRow('الرابط الأصلي', url, true);
 
-    // 2) تخمين جودات شائعة بناءً على اسم الملف
+    // 2) تخمين جودات شائعة (لغير HLS فقط)
     if(!isHls(url)) {
       const qualities = ['1080p','720p','480p','360p'];
       qualities.forEach(q=>{
@@ -159,6 +236,20 @@
         }
       });
     }
+  }
+
+  function prepareYouTubeUI(videoUrl){
+    resetUI();
+    dlBox.classList.add('hidden'); // لا عرض لخيارات التحميل
+    ytControls.classList.remove('hidden');
+    ytOpenBtn.href = videoUrl;
+    ytCopyBtn.onclick = async ()=>{
+      try{
+        await navigator.clipboard.writeText(videoUrl);
+        ytCopyBtn.textContent = 'تم النسخ ✓';
+        setTimeout(()=> ytCopyBtn.textContent = 'نسخ رابط YouTube', 1200);
+      }catch{ alert('تعذّر النسخ'); }
+    };
   }
 
   function addDownloadRow(label, href, isPrimary){
@@ -187,7 +278,6 @@
     const btns = document.createElement('div');
     btns.className = 'row-btns';
 
-    // زر فتح في تبويب جديد
     const openA = document.createElement('a');
     openA.className = 'dl-btn';
     openA.href = href;
@@ -196,7 +286,6 @@
     openA.textContent = 'فتح';
     btns.appendChild(openA);
 
-    // زر تنزيل مباشر (قد يفشل بسبب CORS)
     const dlA = document.createElement('a');
     dlA.className = 'dl-btn';
     dlA.href = href;
@@ -204,7 +293,6 @@
     dlA.textContent = 'تنزيل';
     btns.appendChild(dlA);
 
-    // زر نسخ الرابط
     const copyBtn = document.createElement('button');
     copyBtn.className = 'dl-btn';
     copyBtn.textContent = 'نسخ الرابط';
@@ -232,16 +320,23 @@
 
   function clearPlayer(){
     if(currentHls){
-      try {
-        currentHls.destroy();
-      } catch(e){}
+      try { currentHls.destroy(); } catch(e){}
       currentHls = null;
     }
+    // إخفاء YouTube وإيقافه
+    if(ytPlayer && ytPlayer.stopVideo){
+      try { ytPlayer.stopVideo(); } catch(e){}
+    }
+    ytWrap.classList.add('hidden');
+
+    // فيديو HTML5
     video.pause();
     video.removeAttribute('src');
-    // مسح مصادر الفيديو إن وجدت
     while(video.firstChild) video.removeChild(video.firstChild);
     video.load();
+
+    // إخفاء صناديق التحكم
+    ytControls.classList.add('hidden');
   }
 
   function playUrl(url){
@@ -249,28 +344,37 @@
     playerBox.classList.remove('hidden');
     lastSourceUrl = url;
 
+    // كشف يوتيوب
+    if(isYouTube(url)){
+      const id = extractYouTubeId(url);
+      if(!id){
+        showError('تعذّر استخراج المعرّف من رابط YouTube.');
+        return;
+      }
+      lastYtUrl = url;
+      prepareYouTubeUI(url);
+      playYouTube(id);
+      showInfo('تم تفعيل مشغّل YouTube الرسمي (التنزيل غير متاح).');
+      return;
+    }
+
     // إن كان HLS
     if(isHls(url)){
       if(window.Hls && window.Hls.isSupported()){
-        currentHls = new Hls({
-          // يمكن تعديل الإعدادات هنا إذا رغبت
-          // مثل: maxBufferLength: 30
-        });
+        currentHls = new Hls();
         currentHls.attachMedia(video);
         currentHls.on(Hls.Events.MEDIA_ATTACHED, () => {
           currentHls.loadSource(url);
         });
 
-        // عند تحليل القائمة، سنعرض الجودات المتوفرة
         currentHls.on(Hls.Events.MANIFEST_PARSED, (evt, data) => {
           const levels = data && data.levels ? data.levels : (currentHls.levels || []);
           buildHlsQualityList(levels, url);
-          showInfo(`تم تحميل قائمة HLS. وجدنا ${levels.length} جودة متاحة (إن دعمت المنصة تبديل الجودة).`);
+          showInfo(`تم تحميل قائمة HLS. وجدنا ${levels.length} جودة متاحة.`);
           video.play().catch(()=>{});
         });
 
         currentHls.on(Hls.Events.ERROR, (evt, data) => {
-          console.warn('HLS error', data);
           if(data && data.fatal){
             switch(data.type){
               case Hls.ErrorTypes.NETWORK_ERROR:
@@ -289,16 +393,16 @@
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegURL')) {
-        // دعم HLS أصلي (Safari غالباً)
         video.src = url;
-        buildHlsQualityList([], url); // لا يمكن استخراج الجودات هنا، نعرض فقط زر نسخ الماستر
+        buildHlsQualityList([], url);
         video.addEventListener('loadedmetadata', () => {
           video.play().catch(()=>{});
-        });
+        }, { once: true });
         showInfo('يتم تشغيل HLS بالدعم الأصلي للمتصفح.');
       } else {
         showError('هذا المتصفح لا يدعم HLS، ولم نستطع تحميل hls.js.');
       }
+      prepareDownloadUI(url);
       return;
     }
 
@@ -308,13 +412,84 @@
       video.play().catch(()=>{});
     }, { once: true });
     showInfo('تم تعيين فيديو مباشر للتشغيل.');
+    prepareDownloadUI(url);
+  }
+
+  // إنشاء/تحميل مشغّل YouTube
+  function createOrLoadYt(id){
+    ytWrap.classList.remove('hidden');
+    // إنشاء أول مرة
+    if(!ytPlayer){
+      ytPlayer = new YT.Player('ytPlayer', {
+        videoId: id,
+        playerVars: {
+          playsinline: 1,
+          modestbranding: 1,
+          rel: 0
+        },
+        events: {
+          'onReady': onYtReady,
+          'onStateChange': onYtStateChange
+        }
+      });
+    } else {
+      ytPlayer.loadVideoById(id);
+    }
+  }
+  function onYtReady(){
+    try { ytPlayer.playVideo(); } catch(e){}
+    populateYtQualities();
+  }
+  function onYtStateChange(){
+    // عند تغيير الحالة يمكننا تحديث الجودات مجددًا
+    populateYtQualities();
+  }
+  function populateYtQualities(){
+    if(!ytPlayer || !ytPlayer.getAvailableQualityLevels) return;
+    const levels = ytPlayer.getAvailableQualityLevels(); // أمثلة: ['highres','hd1080','hd720','large','medium','small','tiny','auto']
+    ytQualitySel.innerHTML = '';
+    const mapText = {
+      'auto':'تلقائي','highres':'أعلى دقة','hd2160':'2160p','hd1440':'1440p','hd1080':'1080p','hd720':'720p',
+      'large':'480p','medium':'360p','small':'240p','tiny':'144p','default':'افتراضي'
+    };
+    // أضف تلقائي/افتراضي أولاً
+    const defaultOpts = ['auto','default'];
+    defaultOpts.forEach(q=>{
+      const opt = document.createElement('option');
+      opt.value = q;
+      opt.textContent = mapText[q] || q;
+      ytQualitySel.appendChild(opt);
+    });
+    // ثم المستويات المتاحة من YouTube
+    levels.forEach(q=>{
+      if(defaultOpts.includes(q)) return;
+      const opt = document.createElement('option');
+      opt.value = q;
+      opt.textContent = mapText[q] || q;
+      ytQualitySel.appendChild(opt);
+    });
+
+    ytQualitySel.onchange = ()=>{
+      const q = ytQualitySel.value;
+      if(q === 'auto' || q === 'default'){
+        // لا نحدد جودة؛ نتركها تلقائية
+        // بعض النسخ تدعم setPlaybackQuality('auto')، وبعضها تتجاهله.
+        try { ytPlayer.setPlaybackQuality('auto'); } catch(e){}
+      } else {
+        try { ytPlayer.setPlaybackQuality(q); } catch(e){}
+      }
+    };
+  }
+  function playYouTube(id){
+    ytWrap.classList.remove('hidden');
+    if(ytApiReady) createOrLoadYt(id);
+    else pendingYtId = id;
   }
 
   function buildHlsQualityList(levels, masterUrl){
     hlsList.innerHTML = '';
     hlsSection.classList.remove('hidden');
 
-    // زر لنسخ رابط الماستر m3u8 دائماً
     const masterRow = document.createElement('div');
     masterRow.className = 'dl-item';
 
@@ -355,7 +530,6 @@
     masterRow.appendChild(btns);
     hlsList.appendChild(masterRow);
 
-    // إن وُجدت مستويات جودة من hls.js نعرضها للتشغيل (تبديل الجودة)
     if(levels && levels.length){
       levels.forEach((lvl, idx)=>{
         const row = document.createElement('div');
@@ -384,11 +558,11 @@
         setQ.textContent = 'تشغيل هذه الجودة';
         setQ.addEventListener('click', ()=>{
           if(currentHls){
-            currentHls.currentLevel = idx; // تبديل الجودة
+            currentHls.currentLevel = idx;
             showInfo(`تم اختيار الجودة رقم ${idx} (${height || 'UNK'}).`);
             video.play().catch(()=>{});
           } else {
-            showInfo('لا يمكن تبديل الجودة في الدعم الأصلي للمتصفح.');
+            showInfo('لا يمكن تبديل الجودة في دعم HLS الأصلي للمتصفح.');
           }
         });
         btns.appendChild(setQ);
@@ -405,43 +579,40 @@
     }
   }
 
-  // معالجات الواجهة
+  // زر تشغيل
   playBtn.addEventListener('click', ()=>{
     let url = input.value.trim();
     if(!url){
-      showError('من فضلك أدخل رابط فيديو مباشر.');
+      showError('من فضلك أدخل رابط فيديو.');
       return;
     }
     if(!validateUrl(url)){
-      // السماح بمسارات نسبية مع base الصفحة
-      try{
-        url = new URL(url, location.href).toString();
-      }catch{
-        showError('الرابط غير صالح.');
-        return;
-      }
+      try{ url = new URL(url, location.href).toString(); }
+      catch{ showError('الرابط غير صالح.'); return; }
     }
 
-    // معالجة Mixed Content إذا الصفحة https
     const finalUrl = ensureHttpsIfNeeded(url);
     if(isHttpsPage && /^http:\/\//i.test(url)){
       showInfo('تم تحويل http إلى https لتجنّب الحظر في الصفحات الآمنة.');
     }
 
-    if(!isDirect(finalUrl)){
-      showError('الرجاء إدخال رابط ينتهي بـ mp4 / webm / m3u8.');
+    // YouTube: تشغيل بدون تنزيل
+    if(isYouTube(finalUrl)){
+      playUrl(finalUrl);
       return;
     }
 
-    prepareDownloadUI(finalUrl);
+    // الروابط المباشرة فقط للتحميل
+    if(!isDirect(finalUrl)){
+      showError('الرجاء إدخال رابط ينتهي بـ mp4 / webm / m3u8، أو رابط YouTube للتشغيل فقط.');
+      return;
+    }
+
     playUrl(finalUrl);
   });
 
-  // السماح بالضغط Enter داخل الحقل للتشغيل
   input.addEventListener('keydown', (e)=>{
-    if(e.key === 'Enter'){
-      playBtn.click();
-    }
+    if(e.key === 'Enter') playBtn.click();
   });
 
 })();
