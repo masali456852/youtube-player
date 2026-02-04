@@ -88,10 +88,13 @@
   const dlBox = document.getElementById('dlBox');
   const dlList = document.getElementById('dlList');
 
+  // للحفاظ على جلسة HLS الحالية إن وُجدت
+  let currentHls = null;
+
   // أدوات مساعدة
   const isHttpsPage = location.protocol === 'https:';
   const isHls = (u) => /\.m3u8(\?|#|$)/i.test(u);
-  const isDirect = (u) => /\.(mp4|webm|mkv|m4v)(\?|#|$)/i.test(u) || isHls(u);
+  const isDirect = (u) => /\.(mp4|webm|m4v)(\?|#|$)/i.test(u) || isHls(u);
   const toHttps = (u) => u.replace(/^http:\/\//i, 'https://');
 
   function showError(text){
@@ -115,16 +118,13 @@
     // 1) زر تحميل بالرابط الأصلي
     addDownloadRow('الرابط الأصلي', url, true);
 
-    // 2) أزرار جودات شائعة (تخمينية بالاسم فقط — تعمل إذا كان السيرفر يعتمد نفس النمط)
+    // 2) أزرار جودات شائعة (تخمينية بالاسم فقط)
     const qualities = ['1080p','720p','480p','360p'];
     qualities.forEach(q=>{
-      // نحاول استبدال أي رقم جودة في الاسم إن وجد
       let guessed = url
         .replace(/(\d{3,4}p)/i, q)
         .replace(/_(\d{3,4})\./, `_${q.replace('p','')}.`)
         .replace(/-(\d{3,4})\./, `-${q.replace('p','')}.`);
-
-      // إن لم يتغير شيء، نتركه كما هو (قد لا تتوافر جودة)
       addDownloadRow(`جودة ${q}`, guessed, false);
     });
   }
@@ -149,7 +149,6 @@
 
     const right = document.createElement('div');
 
-    // رابط تحميل مباشر (سيعمل فقط إذا سمح CORS أو كان نفس النطاق)
     const a = document.createElement('a');
     a.className = 'dl-btn';
     a.href = href;
@@ -164,6 +163,25 @@
     dlList.appendChild(row);
   }
 
+  function cleanupPlayer(){
+    // إيقاف أي Hls سابق
+    if (currentHls){
+      try { currentHls.destroy(); } catch(e){}
+      currentHls = null;
+    }
+    // إيقاف الفيديو وتنظيف المصدر
+    try { video.pause(); } catch(e){}
+    video.removeAttribute('src');
+    video.load();
+    // تنظيف أي <source> داخل الفيديو
+    while (video.firstChild) video.removeChild(video.firstChild);
+  }
+
+  function canPlayNativeHls(){
+    // دعم HLS الأصلي (Safari وبعض المتصفحات)
+    return video.canPlayType('application/vnd.apple.mpegurl');
+  }
+
   async function play(){
     let url = input.value.trim();
 
@@ -176,14 +194,14 @@
       return;
     }
 
-    // منع Mixed Content: إن كانت الصفحة https والرابط http سنحوّله لـ https (إن كان متاحًا)
+    // منع Mixed Content: إن كانت الصفحة https والرابط http سنحوّله لـ https
     if(isHttpsPage && url.startsWith('http://')){
       const httpsCandidate = toHttps(url);
       showInfo('تم تحويل الرابط إلى HTTPS لمحاولة تجنّب الحظر (Mixed Content).');
       url = httpsCandidate;
     }
 
-    // تحقّق أنه رابط مباشر لملف فيديو
+    // تحقّق أنه رابط ملف فيديو مباشر
     if(!isDirect(url)){
       showError('هذا ليس رابط ملف فيديو مباشر (mp4/webm/m3u8). الروابط من المنصات (YouTube/Vimeo/Drive) غير مباشرة.');
       playerBox.classList.add('hidden');
@@ -193,14 +211,22 @@
 
     // إظهار المشغل
     playerBox.classList.remove('hidden');
-    video.src = '';
-    video.removeAttribute('src'); // تنظيف
+
+    // تنظيف أي حالة سابقة
+    cleanupPlayer();
 
     // تشغيل حسب النوع
     if(isHls(url)){
-      // m3u8: استخدم hls.js إن كان مدعومًا
       if (window.Hls && Hls.isSupported()){
-        const hls = new Hls();
+        const hls = new Hls({
+          // إعدادات اختيارية يمكن أن تحسّن التوافق
+          xhrSetup: function(xhr){
+            // يمكنك تمرير رؤوس مخصصة هنا إن كنت تتحكم في السيرفر
+            // xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+          }
+        });
+        currentHls = hls;
+
         hls.on(Hls.Events.ERROR, function(event, data){
           console.warn('HLS error', data);
           if(data && data.details){
@@ -209,30 +235,39 @@
             showError('فشل تشغيل HLS — تحقق من السماح عبر CORS.');
           }
         });
-        hls.loadSource(url);
-        hls.attachMedia(video);
-      } else {
-        // بعض المتصفحات تدعم HLS أصلاً (Safari)
+
+        try{
+          hls.loadSource(url);
+          hls.attachMedia(video);
+        }catch(e){
+          showError('تعذّر تحميل مصدر HLS. تحقق من الرابط وقيود CORS.');
+        }
+      } else if (canPlayNativeHls()){
+        // بعض المتصفحات تدعم HLS أصلاً
         video.src = url;
+        video.load();
+      } else {
+        showError('متصفحك لا يدعم HLS، ولم تتوفر hls.js بشكل صحيح.');
+        return;
       }
-    }else{
-      // mp4/webm/mkv/m4v
-      // تعيين نوع تقريبي يفيد بعض المتصفحات
-      const type = /\.webm(\?|#|$)/i.test(url) ? 'video/webm' : 'video/mp4';
+    } else {
+      // mp4 / webm / m4v
+      // يكفي ضبط src، ولا حاجة لإضافة type على العنصر مباشرة
       video.src = url;
-      video.type = type;
+      video.load();
     }
 
     // إعداد التحميل
     prepareDownloadUI(url);
 
-    // رسائل إرشادية محتملة
+    // رسائل إرشادية
     showInfo(
 `تم تجهيز المشغل.
 إن ظهر شاشة سوداء أو لم يبدأ التشغيل:
-• تأكد أن الرابط يعمل مباشرة في المتصفح (افتحه في تبويب جديد).
-• تأكد أن الرابط HTTPS إذا كانت صفحتك HTTPS (GitHub Pages).
-• إن فشل التحميل أو التشغيل من نطاق خارجي، غالبًا يمنع السيرفر CORS.`
+• افتح الرابط نفسه في تبويب جديد للتأكد أنه يعمل مباشرة.
+• استخدم HTTPS إذا كانت صفحتك HTTPS (لتجنّب Mixed Content).
+• إذا كان الملف على نطاق خارجي ويمنع CORS، قد يفشل التشغيل أو التحميل.
+• متصفحات عديدة لا تدعم MKV، استخدم MP4/WebM أو M3U8 (HLS).`
     );
   }
 
